@@ -552,11 +552,11 @@ def train_model(model, train_loader, val_loader, foul_criterion, action_criterio
 if __name__ == "__main__":
     device = "cuda:0"
     
-    train_data_dirs = ["dataset/train_preprocessed", "dataset/valid_preprocessed"]
-    train_json_paths = ["dataset/train/annotations.json", "dataset/valid/annotations.json"]
+    train_data_dirs = ["/kaggle/input/datasetmvfd/datasetMVFD/train_preprocessed", "/kaggle/input/datasetmvfd/datasetMVFD/valid_preprocessed"]
+    train_json_paths = ["/kaggle/input/datasetmvfd/datasetMVFD/train_preprocessed/annotations.json", "/kaggle/input/datasetmvfd/datasetMVFD/valid_preprocessed/annotations.json"]
     train_dataset = MVFoulDataset(train_data_dirs, train_json_paths, split='train', curriculum=True, preload=True)
     
-    val_dataset = MVFoulDataset("dataset/test_preprocessed", "dataset/test/annotations.json", split='val', preload=True)
+    val_dataset = MVFoulDataset("/kaggle/input/datasetmvfd/datasetMVFD/test_preprocessed", "/kaggle/input/datasetmvfd/datasetMVFD/test_preprocessed/annotations.json", split='val', preload=True)
     
     foul_weights, action_weights, train_foul_counts, train_action_counts = compute_class_weights(
         train_json_paths, train_dataset.foul_map, train_dataset.action_map
