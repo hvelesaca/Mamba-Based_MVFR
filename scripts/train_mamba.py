@@ -422,7 +422,7 @@ if __name__ == "__main__":
         "/kaggle/input/datasetmvfd/datasetMVFD/test_preprocessed/annotations.json",
         split='val',
         preload=True,
-        downsample_factor=2,
+        downsample_factor=1,
         max_clips_per_video=2
     )
 
