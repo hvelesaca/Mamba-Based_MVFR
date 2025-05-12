@@ -17,7 +17,8 @@ class MVFoulDataset(Dataset):
         "Challenge": 4, "Dive": 5, "High Leg": 6, "Elbowing": 7
     }
 
-    def __init__(self, data_dirs, json_paths, num_frames=16, split='train', curriculum=False, preload=True):
+    def __init__(self, data_dirs, json_paths, num_frames=16, split='train', curriculum=False, preload=False,
+                 downsample_factor=1, max_clips_per_video=2):
         self.data_dirs = data_dirs if isinstance(data_dirs, list) else [data_dirs]
         self.json_paths = json_paths if isinstance(json_paths, list) else [json_paths]
         self.metadata = {}
@@ -32,17 +33,19 @@ class MVFoulDataset(Dataset):
         self.split = split
         self.curriculum = curriculum
         self.preload = preload
+        self.downsample_factor = downsample_factor
+        self.max_clips_per_video = max_clips_per_video
         self.action_normalization = {
             "standing tackle": "Standing Tackling", "tackle": "Tackling", "high leg": "High Leg",
             "dont know": None, "": None, "challenge": "Challenge", "dive": "Dive",
             "elbowing": "Elbowing", "holding": "Holding", "pushing": "Pushing", "high Leg": "High Leg"
         }
-        
+
         self.valid_action_folders = []
         self.foul_labels = []
         self.action_labels = []
         self.folder_to_dir = {}
-        
+
         for data_dir in self.data_dirs:
             for folder in os.listdir(data_dir):
                 if not folder.endswith(".pt"):
@@ -53,22 +56,22 @@ class MVFoulDataset(Dataset):
                 offence = self.metadata[action_id]["Offence"].lower()
                 severity_str = self.metadata[action_id]["Severity"]
                 action_class = self.metadata[action_id]["Action class"].lower()
-                
+
                 normalized_action = self.action_normalization.get(action_class, action_class.title())
                 if normalized_action is None or normalized_action not in self.action_map:
                     continue
-                
+
                 if (offence == '' or offence == 'between') and normalized_action != 'Dive':
                     continue
                 if (severity_str == '' or severity_str == '2.0' or severity_str == '4.0') and \
                    normalized_action != 'Dive' and offence != 'no offence':
                     continue
-                
+
                 if offence == '' or offence == 'between':
                     offence = 'offence'
                 if severity_str == '' or severity_str == '2.0' or severity_str == '4.0':
                     severity_str = '1.0'
-                
+
                 if offence == 'no offence':
                     foul_label = 0
                 elif offence == 'offence':
@@ -83,16 +86,16 @@ class MVFoulDataset(Dataset):
                         continue
                 else:
                     continue
-                
+
                 action_label = self.action_map[normalized_action]
-                
+
                 self.valid_action_folders.append(folder)
                 self.foul_labels.append(foul_label)
                 self.action_labels.append(action_label)
                 self.folder_to_dir[folder] = data_dir
-        
+
         self.action_folders = self.valid_action_folders
-        
+
         if self.preload:
             print(f"Preloading {len(self.action_folders)} .pt files for {split} split...")
             self.clips_cache = {}
@@ -100,13 +103,25 @@ class MVFoulDataset(Dataset):
                 action_id = folder.replace(".pt", "").replace("action_", "")
                 action_path = os.path.join(self.folder_to_dir[folder], folder)
                 clips = torch.load(action_path, weights_only=False).float() / 255.0
-                if clips.shape[0] == 1:
-                    clips = torch.stack([clips[0], clips[0]])
-                else:
-                    random_idx = torch.randint(1, clips.shape[0], (1,)).item()
-                    clips = torch.stack([clips[0], clips[random_idx]])
+
+                # Limit number of clips per video
+                if clips.shape[0] > self.max_clips_per_video:
+                    indices = [0] + list(torch.randperm(clips.shape[0]-1)[:self.max_clips_per_video-1].add(1).tolist())
+                    clips = clips[indices]
+
+                # Downsample spatial dimensions if needed
+                if self.downsample_factor > 1:
+                    _, C, T, H, W = clips.shape
+                    new_H, new_W = H // self.downsample_factor, W // self.downsample_factor
+                    clips = F.interpolate(
+                        clips.reshape(-1, C, H, W),
+                        size=(new_H, new_W),
+                        mode='bilinear',
+                        align_corners=False
+                    ).reshape(-1, C, T, new_H, new_W)
+
                 self.clips_cache[action_id] = clips
-        
+
         if self.curriculum and self.split == 'train':
             indices = []
             for i in range(len(self.action_folders)):
@@ -131,296 +146,113 @@ class MVFoulDataset(Dataset):
         else:
             action_path = os.path.join(self.folder_to_dir[self.action_folders[actual_idx]], self.action_folders[actual_idx])
             clips = torch.load(action_path, weights_only=False).float() / 255.0
-            if clips.shape[0] == 1:
-                clips = torch.stack([clips[0], clips[0]])
-            else:
-                random_idx = torch.randint(1, clips.shape[0], (1,)).item()
-                clips = torch.stack([clips[0], clips[random_idx]])
+
+            # Apply same processing as in preload
+            if clips.shape[0] > self.max_clips_per_video:
+                indices = [0] + list(torch.randperm(clips.shape[0]-1)[:self.max_clips_per_video-1].add(1).tolist())
+                clips = clips[indices]
+
+            if self.downsample_factor > 1:
+                _, C, T, H, W = clips.shape
+                new_H, new_W = H // self.downsample_factor, W // self.downsample_factor
+                clips = F.interpolate(
+                    clips.reshape(-1, C, H, W),
+                    size=(new_H, new_W),
+                    mode='bilinear',
+                    align_corners=False
+                ).reshape(-1, C, T, new_H, new_W)
+
+        # Select clips as before
+        if clips.shape[0] == 1:
+            clips = torch.stack([clips[0], clips[0]])
+        else:
+            random_idx = torch.randint(1, clips.shape[0], (1,)).item()
+            clips = torch.stack([clips[0], clips[random_idx]])
+
         return clips, torch.tensor(self.foul_labels[actual_idx]), torch.tensor(self.action_labels[actual_idx]), action_id
 
-def custom_collate(batch):
-    clips = torch.stack([item[0] for item in batch])
-    foul_labels = torch.tensor([item[1].item() for item in batch], dtype=torch.long)
-    action_labels = torch.tensor([item[2].item() for item in batch], dtype=torch.long)
-    action_ids = [item[3] for item in batch]
-    return clips, foul_labels, action_labels, action_ids
-
-def compute_class_weights(json_paths, foul_map, action_map):
-    metadata = {}
-    for json_path in json_paths if isinstance(json_paths, list) else [json_paths]:
-        with open(json_path, 'r') as f:
-            data = json.load(f)
-            metadata.update(data["Actions"])
-    action_normalization = {
-        "standing tackle": "Standing Tackling", "tackle": "Tackling", "high leg": "High Leg",
-        "dont know": None, "": None, "challenge": "Challenge", "dive": "Dive",
-        "elbowing": "Elbowing", "holding": "Holding", "pushing": "Pushing", "high Leg": "High Leg"
-    }
-    foul_labels = []
-    action_labels = []
-    for action_id, video in metadata.items():
-        offence = video["Offence"].lower()
-        severity_str = video["Severity"]
-        action_class = video["Action class"].lower()
-        normalized_action = action_normalization.get(action_class, action_class.title())
-        if normalized_action is None or normalized_action not in action_map:
-            continue
-        if (offence == '' or offence == 'between') and normalized_action != 'Dive':
-            continue
-        if (severity_str == '' or severity_str == '2.0' or severity_str == '4.0') and \
-           normalized_action != 'Dive' and offence != 'no offence':
-            continue
-        if offence == '' or offence == 'between':
-            offence = 'offence'
-        if severity_str == '' or severity_str == '2.0' or severity_str == '4.0':
-            severity_str = '1.0'
-        if offence == 'no offence':
-            foul_label = 0
-        elif offence == 'offence':
-            severity = float(severity_str)
-            if severity == 1.0:
-                foul_label = 1
-            elif severity == 3.0:
-                foul_label = 2
-            elif severity == 5.0:
-                foul_label = 3
-            else:
-                continue
-        else:
-            continue
-        action_label = action_map[normalized_action]
-        foul_labels.append(foul_label)
-        action_labels.append(action_label)
-    foul_counts = torch.bincount(torch.tensor(foul_labels), minlength=len(foul_map))
-    action_counts = torch.bincount(torch.tensor(action_labels), minlength=len(action_map))
-    foul_weights = 1.0 / torch.sqrt(foul_counts.float() + 1e-6)
-    action_weights = 1.0 / torch.sqrt(action_counts.float() + 1e-6)
-    return foul_weights / foul_weights.sum(), action_weights / action_weights.sum(), foul_counts, action_counts
-
-def print_unique_values_and_frequencies(dataset, split_name, foul_counts, action_counts):
-    action_classes = set()
-    severities = set()
-    offences = set()
-    for folder in dataset.action_folders:
-        action_id = folder.replace(".pt", "").replace("action_", "")
-        meta = dataset.metadata[action_id]
-        action_classes.add(meta["Action class"])
-        severities.add(meta["Severity"] if meta["Severity"] else "Empty")
-        offences.add(meta["Offence"] if meta["Offence"] else "Empty")
-    print(f"\nUnique values for {split_name} split:")
-    print(f"Action classes: {sorted(action_classes)}")
-    print(f"Severities: {sorted(severities)}")
-    print(f"Offences: {sorted(offences)}")
-    foul_labels_map = {0: "No Offence", 1: "Offence Severity 1", 2: "Offence Severity 3", 3: "Offence Severity 5"}
-    print(f"\nFoul label frequencies for {split_name} split:")
-    for label, count in enumerate(foul_counts):
-        print(f"{foul_labels_map[label]}: {int(count)}")
-    action_labels_map = {v: k for k, v in MVFoulDataset.action_map.items()}
-    print(f"\nAction label frequencies for {split_name} split:")
-    for label, count in enumerate(action_counts):
-        print(f"{action_labels_map[label]}: {int(count)}")
-
-def generate_predictions_json(action_ids, logits, task_name):
-    predictions = {"Actions": {}}
-    reverse_foul_map = {v: k for k, v in MVFoulDataset.foul_map.items()}
-    reverse_action_map = {v: k for k, v in MVFoulDataset.action_map.items()}
-    
-    for action_id, logit in zip(action_ids, logits):
-        probs = torch.softmax(logit, dim=0).detach().cpu().numpy()
-        pred_idx = torch.argmax(logit).item()
-        if task_name == "Foul":
-            pred_label = reverse_foul_map[pred_idx]
-            if pred_label == "No Offence":
-                offence = "No offence"
-                severity = ""
-            else:
-                offence = "Offence"
-                severity = pred_label.split("Severity ")[1]
-            predictions["Actions"][action_id] = {
-                "Offence": offence,
-                "Severity": severity,
-                "confidence": float(probs[pred_idx])
-            }
-        else:  # Action
-            pred_label = reverse_action_map[pred_idx]
-            predictions["Actions"][action_id] = {
-                "Action class": pred_label,
-                "confidence": float(probs[pred_idx])
-            }
-    return predictions
-
-def generate_groundtruth_json(dataset, task_name):
-    groundtruth = {"Actions": {}}
-    reverse_foul_map = {v: k for k, v in dataset.foul_map.items()}
-    reverse_action_map = {v: k for k, v in dataset.action_map.items()}
-    
-    for idx in range(len(dataset.action_folders)):
-        action_id = dataset.action_folders[idx].replace(".pt", "").replace("action_", "")
-        action_class = reverse_action_map[dataset.action_labels[idx]]
-        if task_name == "Foul":
-            foul_label = reverse_foul_map[dataset.foul_labels[idx]]
-            if foul_label == "No Offence":
-                offence = "No offence"
-                severity = ""
-            else:
-                offence = "Offence"
-                severity = foul_label.split("Severity ")[1]
-            groundtruth["Actions"][action_id] = {
-                "Action class": action_class,
-                "Offence": offence,
-                "Severity": severity
-            }
-        else:  # Action
-            action_label = reverse_action_map[dataset.action_labels[idx]]
-            groundtruth["Actions"][action_id] = {
-                "Action class": action_label
-            }
-    return groundtruth
-
-def custom_evaluate(predictions, groundtruth, task_name):
-    if task_name == "Foul":
-        num_classes = 4
-        class_names = ["No offence", "Offence Severity 1", "Offence Severity 3", "Offence Severity 5"]
-    else:  # Action
-        num_classes = 8
-        class_names = list(MVFoulDataset.action_map.keys())
-    
-    true_counts = np.zeros(num_classes)
-    pred_correct = np.zeros(num_classes)
-    
-    for action_id in groundtruth["Actions"]:
-        true_action = groundtruth["Actions"][action_id]["Action class"]
-        if task_name == "Foul":
-            true_offence = groundtruth["Actions"][action_id]["Offence"]
-            true_severity = groundtruth["Actions"][action_id]["Severity"]
-            if true_offence == "No offence":
-                true_idx = 0
-            elif true_offence == "Offence":
-                if true_severity == "1":
-                    true_idx = 1
-                elif true_severity == "3":
-                    true_idx = 2
-                elif true_severity == "5":
-                    true_idx = 3
-                else:
-                    continue
-            else:
-                continue
-            true_counts[true_idx] += 1
-        else:
-            true_idx = MVFoulDataset.action_map[true_action]
-            true_counts[true_idx] += 1
-        
-        if action_id in predictions["Actions"]:
-            if task_name == "Foul":
-                pred_offence = predictions["Actions"][action_id]["Offence"]
-                pred_severity = predictions["Actions"][action_id]["Severity"]
-                if pred_offence == true_offence and pred_severity == true_severity:
-                    pred_correct[true_idx] += 1
-            else:
-                pred_action = predictions["Actions"][action_id]["Action class"]
-                if pred_action == true_action:
-                    pred_correct[true_idx] += 1
-    
-    accuracy = sum(pred_correct) / sum(true_counts) if sum(true_counts) > 0 else 0.0
-    per_class_acc = {}
-    for i, name in enumerate(class_names):
-        per_class_acc[name] = pred_correct[i] / true_counts[i] if true_counts[i] > 0 else 0.0
-    ba = np.mean(pred_correct / true_counts) if sum(true_counts) > 0 else 0.0
-    
-    if task_name == "Foul":
-        return {
-            "accuracy_offence_severity": accuracy * 100,
-            "balanced_accuracy_offence_severity": ba * 100,
-            "per_class_offence": per_class_acc
-        }
-    else:
-        return {
-            "accuracy_action": accuracy * 100,
-            "balanced_accuracy_action": ba * 100,
-            "per_class_action": per_class_acc
-        }
-
-def compute_balanced_accuracy(true_labels, pred_labels, num_classes):
-    per_class_acc = []
-    for cls in range(num_classes):
-        cls_true = [1 if t == cls else 0 for t in true_labels]
-        cls_pred = [1 if p == cls else 0 for p in pred_labels]
-        correct = sum(1 for t, p in zip(cls_true, cls_pred) if t == 1 and p == 1)
-        total = sum(cls_true)
-        acc = correct / total if total > 0 else 0.0
-        per_class_acc.append(acc)
-    return sum(per_class_acc) / len(per_class_acc) if per_class_acc else 0.0
 
 def train_model(model, train_loader, val_loader, foul_criterion, action_criterion, num_epochs=200, device="cuda:0"):
     model = model.to(device)
-    
+
     augment = nn.Sequential(
         K.RandomHorizontalFlip(p=0.5),
         K.RandomAffine(degrees=15, translate=(0.1, 0.1), scale=(0.8, 1.2)),
         K.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1, p=0.5)
     ).to(device) if "train" in train_loader.dataset.split else nn.Identity()
-    
+
     optimizer = optim.AdamW(model.parameters(), lr=5e-5, weight_decay=0.01)
     scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=1e-4, total_steps=num_epochs * len(train_loader), pct_start=0.1)
-    
+    scaler = GradScaler()  # For mixed precision training
+
     os.makedirs("models", exist_ok=True)
     best_val_ba = 0.0
     patience = 50
     patience_counter = 0
-    
+    accumulation_steps = 2  # Accumulate gradients over multiple batches
+
     val_gt_foul_json = generate_groundtruth_json(val_loader.dataset, "Foul")
     val_gt_action_json = generate_groundtruth_json(val_loader.dataset, "Action")
     with open("val_gt_foul.json", "w") as f:
         json.dump(val_gt_foul_json, f)
     with open("val_gt_action.json", "w") as f:
         json.dump(val_gt_action_json, f)
-    
+
     for epoch in range(num_epochs):
         if epoch == 2:
             print("Unfreezing the backbone...")
             model.unfreeze_backbone()
             optimizer = optim.AdamW(model.parameters(), lr=2e-5, weight_decay=0.01)
             scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=5e-5, total_steps=(num_epochs - epoch) * len(train_loader), pct_start=0.1)
-        
+
         model.train()
         train_foul_loss = 0.0
         train_action_loss = 0.0
         all_foul_preds, all_action_preds, all_foul_labels, all_action_labels = [], [], [], []
         train_predictions = {}
-        
+
+        optimizer.zero_grad()  # Zero gradients at the beginning of epoch
+
         with tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs} [Train MultiTaskMamba]") as pbar:
-            for batch_clips, foul_labels, action_labels, action_ids in pbar:
+            for batch_idx, (batch_clips, foul_labels, action_labels, action_ids) in enumerate(pbar):
                 batch_clips = batch_clips.to(device, non_blocking=True)
                 foul_labels = foul_labels.to(device, non_blocking=True)
                 action_labels = action_labels.to(device, non_blocking=True)
-                
+
                 B, V, C, T, H, W = batch_clips.shape
                 batch_clips = batch_clips.reshape(B * V * T, C, H, W)
                 batch_clips = augment(batch_clips)
                 batch_clips = batch_clips.reshape(B, V, C, T, H, W)
-                
-                optimizer.zero_grad()
-                foul_logits, action_logits = model(batch_clips)
-                
-                foul_loss = foul_criterion(foul_logits, foul_labels)
-                action_loss = action_criterion(action_logits, action_labels)
-                loss = foul_loss + action_loss
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-                optimizer.step()
-                scheduler.step()
-                
+
+                # Use mixed precision training
+                with autocast():
+                    foul_logits, action_logits = model(batch_clips)
+                    foul_loss = foul_criterion(foul_logits, foul_labels)
+                    action_loss = action_criterion(action_logits, action_labels)
+                    loss = (foul_loss + action_loss) / accumulation_steps
+
+                # Scale loss and backpropagate
+                scaler.scale(loss).backward()
+
+                # Update weights after accumulation_steps or at the end of the epoch
+                if (batch_idx + 1) % accumulation_steps == 0 or (batch_idx + 1) == len(train_loader):
+                    scaler.unscale_(optimizer)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                    scaler.step(optimizer)
+                    scaler.update()
+                    optimizer.zero_grad()
+                    scheduler.step()
+
                 train_foul_loss += foul_loss.item()
                 train_action_loss += action_loss.item()
-                
+
                 foul_preds = torch.argmax(foul_logits, 1)
                 action_preds = torch.argmax(action_logits, 1)
                 all_foul_preds.extend(foul_preds.cpu().tolist())
                 all_action_preds.extend(action_preds.cpu().tolist())
                 all_foul_labels.extend(foul_labels.cpu().tolist())
                 all_action_labels.extend(action_labels.cpu().tolist())
-                
+
                 for action_id, f_logit, a_logit in zip(action_ids, foul_logits, action_logits):
                     f_probs = torch.softmax(f_logit, dim=0).detach().cpu().numpy()
                     a_probs = torch.softmax(a_logit, dim=0).detach().cpu().numpy()
@@ -435,9 +267,13 @@ def train_model(model, train_loader, val_loader, foul_criterion, action_criterio
                         "Action class": a_label,
                         "confidence_action": float(a_probs[a_pred])
                     }
-                
+
                 pbar.set_postfix({'foul_loss': train_foul_loss / (pbar.n + 1), 'action_loss': train_action_loss / (pbar.n + 1)})
-        
+
+                # Free up memory
+                del batch_clips, foul_logits, action_logits, loss
+                torch.cuda.empty_cache()
+
         train_foul_loss /= len(train_loader)
         train_action_loss /= len(train_loader)
         train_foul_acc = sum(p == l for p, l in zip(all_foul_preds, all_foul_labels)) / len(all_foul_labels)
@@ -448,37 +284,42 @@ def train_model(model, train_loader, val_loader, foul_criterion, action_criterio
         train_action_pred_counts = np.bincount(all_action_preds, minlength=8)
         train_foul_true_counts = np.bincount(all_foul_labels, minlength=4)
         train_action_true_counts = np.bincount(all_action_labels, minlength=8)
-        
+
         train_pred_json = {"Actions": train_predictions}
         with open(f"train_pred_multitask_mamba_epoch{epoch+1}.json", "w") as f:
             json.dump(train_pred_json, f)
-        
+
+        # Clear memory before validation
+        torch.cuda.empty_cache()
+
         model.eval()
         val_foul_loss = 0.0
         val_action_loss = 0.0
         all_foul_preds, all_action_preds, all_foul_labels, all_action_labels = [], [], [], []
         val_predictions = {}
-        
+
         with torch.no_grad():
             for batch_clips, foul_labels, action_labels, action_ids in val_loader:
                 batch_clips = batch_clips.to(device, non_blocking=True)
                 foul_labels = foul_labels.to(device, non_blocking=True)
                 action_labels = action_labels.to(device, non_blocking=True)
-                
-                foul_logits, action_logits = model(batch_clips)
-                foul_loss = foul_criterion(foul_logits, foul_labels)
-                action_loss = action_criterion(action_logits, action_labels)
-                
+
+                # Use mixed precision for validation too
+                with autocast():
+                    foul_logits, action_logits = model(batch_clips)
+                    foul_loss = foul_criterion(foul_logits, foul_labels)
+                    action_loss = action_criterion(action_logits, action_labels)
+
                 val_foul_loss += foul_loss.item()
                 val_action_loss += action_loss.item()
-                
+
                 foul_preds = torch.argmax(foul_logits, 1)
                 action_preds = torch.argmax(action_logits, 1)
                 all_foul_preds.extend(foul_preds.cpu().tolist())
                 all_action_preds.extend(action_preds.cpu().tolist())
                 all_foul_labels.extend(foul_labels.cpu().tolist())
                 all_action_labels.extend(action_labels.cpu().tolist())
-                
+
                 for action_id, f_logit, a_logit in zip(action_ids, foul_logits, action_logits):
                     f_probs = torch.softmax(f_logit, dim=0).detach().cpu().numpy()
                     a_probs = torch.softmax(a_logit, dim=0).detach().cpu().numpy()
@@ -493,7 +334,11 @@ def train_model(model, train_loader, val_loader, foul_criterion, action_criterio
                         "Action class": a_label,
                         "confidence_action": float(a_probs[a_pred])
                     }
-        
+
+                # Free up memory
+                del batch_clips, foul_logits, action_logits
+                torch.cuda.empty_cache()
+
         val_foul_loss /= len(val_loader)
         val_action_loss /= len(val_loader)
         val_foul_acc = sum(p == l for p, l in zip(all_foul_preds, all_foul_labels)) / len(all_foul_labels)
@@ -504,21 +349,21 @@ def train_model(model, train_loader, val_loader, foul_criterion, action_criterio
         val_action_pred_counts = np.bincount(all_action_preds, minlength=8)
         val_foul_true_counts = np.bincount(all_foul_labels, minlength=4)
         val_action_true_counts = np.bincount(all_action_labels, minlength=8)
-        
+
         val_pred_json = {"Actions": val_predictions}
         with open(f"val_pred_multitask_mamba_epoch{epoch+1}.json", "w") as f:
             json.dump(val_pred_json, f)
-        
+
         foul_results = custom_evaluate(val_pred_json, val_gt_foul_json, "Foul")
         action_results = custom_evaluate(val_pred_json, val_gt_action_json, "Action")
-        
+
         sn_foul_acc = foul_results["accuracy_offence_severity"]
         sn_foul_ba = foul_results["balanced_accuracy_offence_severity"]
         sn_foul_per_class = foul_results["per_class_offence"]
         sn_action_acc = action_results["accuracy_action"]
         sn_action_ba = action_results["balanced_accuracy_action"]
         sn_action_per_class = action_results["per_class_action"]
-        
+
         print(f"Epoch {epoch+1}/{num_epochs}, "
               f"Train Foul Loss: {train_foul_loss:.4f}, Train Action Loss: {train_action_loss:.4f}, "
               f"Train Foul Acc: {train_foul_acc:.4f}, Train Action Acc: {train_action_acc:.4f}, "
@@ -536,7 +381,7 @@ def train_model(model, train_loader, val_loader, foul_criterion, action_criterio
         print(f"Val Foul pred distribution: {val_foul_pred_counts}")
         print(f"Val Action true distribution: {val_action_true_counts}")
         print(f"Val Action pred distribution: {val_action_pred_counts}")
-        
+
         combined_ba = (sn_foul_ba + sn_action_ba) / 2
         if combined_ba > best_val_ba:
             best_val_ba = combined_ba
@@ -549,34 +394,58 @@ def train_model(model, train_loader, val_loader, foul_criterion, action_criterio
                 print(f"Early stopping at epoch {epoch+1}")
                 break
 
+        # Clear memory at the end of epoch
+        torch.cuda.empty_cache()
+
 if __name__ == "__main__":
     device = "cuda:0"
-    
+
+    # Import for mixed precision training
+    from torch.cuda.amp import autocast, GradScaler
+
     train_data_dirs = ["/kaggle/input/datasetmvfd/datasetMVFD/train_preprocessed", "/kaggle/input/datasetmvfd/datasetMVFD/valid_preprocessed"]
     train_json_paths = ["/kaggle/input/datasetmvfd/datasetMVFD/train_preprocessed/annotations.json", "/kaggle/input/datasetmvfd/datasetMVFD/valid_preprocessed/annotations.json"]
-    train_dataset = MVFoulDataset(train_data_dirs, train_json_paths, split='train', curriculum=True, preload=True)
-    
-    val_dataset = MVFoulDataset("/kaggle/input/datasetmvfd/datasetMVFD/test_preprocessed", "/kaggle/input/datasetmvfd/datasetMVFD/test_preprocessed/annotations.json", split='val', preload=True)
-    
+
+    # Use memory-efficient settings
+    train_dataset = MVFoulDataset(
+        train_data_dirs,
+        train_json_paths,
+        split='train',
+        curriculum=True,
+        preload=True,  # Set to False if still having memory issues
+        downsample_factor=2,  # Reduce spatial dimensions by half
+        max_clips_per_video=2  # Limit clips per video
+    )
+
+    val_dataset = MVFoulDataset(
+        "/kaggle/input/datasetmvfd/datasetMVFD/test_preprocessed",
+        "/kaggle/input/datasetmvfd/datasetMVFD/test_preprocessed/annotations.json",
+        split='val',
+        preload=True,
+        downsample_factor=2,
+        max_clips_per_video=2
+    )
+
     foul_weights, action_weights, train_foul_counts, train_action_counts = compute_class_weights(
         train_json_paths, train_dataset.foul_map, train_dataset.action_map
     )
     _, _, val_foul_counts, val_action_counts = compute_class_weights(
-        "dataset/test/annotations.json", val_dataset.foul_map, val_dataset.action_map
+        "/kaggle/input/datasetmvfd/datasetMVFD/test_preprocessed/annotations.json", val_dataset.foul_map, val_dataset.action_map
     )
-    
-    print_unique_values_and_frequencies(train_dataset, "Training (Train+Valid)", train_foul_counts, train_action_counts)
-    print_unique_values_and_frequencies(val_dataset, "Validation (Test)", val_foul_counts, val_action_counts)
-    
+
+    print(train_dataset, "Training (Train+Valid)", train_foul_counts, train_action_counts)
+    print(val_dataset, "Validation (Test)", val_foul_counts, val_action_counts)
+
     print(f"Training dataset size (original): {len(train_dataset.action_folders)}")
     print(f"Training dataset size (with curriculum): {len(train_dataset)}")
     print(f"Validation dataset size: {len(val_dataset)}")
-    
-    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, collate_fn=custom_collate, num_workers=0, pin_memory=True, drop_last=True)
-    val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False, collate_fn=custom_collate, num_workers=0, pin_memory=True)
-    
+
+    # Reduce batch size
+    train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, collate_fn=custom_collate, num_workers=0, pin_memory=True, drop_last=True)
+    val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False, collate_fn=custom_collate, num_workers=0, pin_memory=True)
+
     print("\nTraining MultiTaskMamba Model...")
-    multitask_model = MultiTaskModelMamba()  # Instantiate the new Mamba model
+    multitask_model = MultiTaskModelMamba()
     foul_criterion = nn.CrossEntropyLoss(weight=foul_weights.to(device), label_smoothing=0.05)
     action_criterion = nn.CrossEntropyLoss(weight=action_weights.to(device), label_smoothing=0.05)
     train_model(multitask_model, train_loader, val_loader, foul_criterion, action_criterion, device=device)
