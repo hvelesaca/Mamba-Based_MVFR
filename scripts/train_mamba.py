@@ -5,7 +5,7 @@ from torch.utils.data import Dataset, DataLoader
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from model_2 import SimpleFoulModel, SimpleActionModel, MultiTaskModel, MultiTaskModelMamba
+from model_2 import MultiTaskModelMamba
 from tqdm import tqdm
 import numpy as np
 import kornia.augmentation as K
