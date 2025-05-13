@@ -288,6 +288,10 @@ class MultiTaskModel(nn.Module):
         action_logits = self.action_branch(inter)
         return foul_logits, action_logits
 
+
+# =========================
+# Ejemplo de uso en tu modelo principal:
+# =========================
 class MultiTaskModelMamba(nn.Module):
     def __init__(self, dropout=0.5):
         super(MultiTaskModelMamba, self).__init__()
@@ -297,7 +301,6 @@ class MultiTaskModelMamba(nn.Module):
         in_features = self.backbone.head[1].in_features
         self.backbone.head[1] = nn.Linear(in_features, 512)
         self.feat_dim = 512
-        # CAMBIO: lifting_net y atención
         self.aggregation_model = ViewMambaAggregate(
             model=self.backbone,
             d_model=self.feat_dim,
@@ -314,14 +317,14 @@ class MultiTaskModelMamba(nn.Module):
             nn.LayerNorm(self.feat_dim),
             nn.Linear(self.feat_dim, 256),
             nn.ReLU(),
-            nn.Dropout(dropout),  # CAMBIO: dropout configurable
+            nn.Dropout(dropout),
             nn.Linear(256, 4)
         )
         self.action_branch = nn.Sequential(
             nn.LayerNorm(self.feat_dim),
             nn.Linear(self.feat_dim, 256),
             nn.ReLU(),
-            nn.Dropout(dropout),  # CAMBIO: dropout configurable
+            nn.Dropout(dropout),
             nn.Linear(256, 8)
         )
 
@@ -331,11 +334,10 @@ class MultiTaskModelMamba(nn.Module):
 
     def forward(self, x):
         batch_size, num_views, C, T, H, W = x.shape
-        x = x.reshape(batch_size * num_views * T, C, H, W)
-        x = F.interpolate(x, size=(224, 224), mode='bilinear', align_corners=False)
-        x = x.reshape(batch_size, num_views, C, T, 224, 224)
+        x = x.reshape(batch_size, num_views, C, T, H, W)
         pooled_view, features = self.aggregation_model(x)
         inter = self.inter(pooled_view)
         foul_logits = self.foul_branch(inter)
         action_logits = self.action_branch(inter)
         return foul_logits, action_logits
+        
