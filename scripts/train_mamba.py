@@ -555,9 +555,9 @@ def train_model(
         if epoch == 2:
             print("Unfreezing the backbone...")
             if hasattr(model, "module"):
-                model.module.unfreeze_backbone()
+                model.module.unfreeze_partial_backbone()
             else:
-                model.unfreeze_backbone()
+                model.unfreeze_partial_backbone()
                 
             optimizer = optim.AdamW(model.parameters(), lr=2e-5, weight_decay=0.01)
             if scheduler_type == "cosine":
