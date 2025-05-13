@@ -49,7 +49,348 @@ def mixup_data(x, y, alpha=0.4):
 def mixup_criterion(criterion, pred, y_a, y_b, lam):
     return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
 
-# ... (El resto de la clase MVFoulDataset y utilidades no cambia) ...
+class MVFoulDataset(Dataset):
+    foul_map = {"No Offence": 0, "Offence Severity 1": 1, "Offence Severity 3": 2, "Offence Severity 5": 3}
+    action_map = {
+        "Standing Tackling": 0, "Tackling": 1, "Holding": 2, "Pushing": 3,
+        "Challenge": 4, "Dive": 5, "High Leg": 6, "Elbowing": 7
+    }
+
+    def __init__(self, data_dirs, json_paths, num_frames=16, split='train', curriculum=False, preload=True):
+        self.data_dirs = data_dirs if isinstance(data_dirs, list) else [data_dirs]
+        self.json_paths = json_paths if isinstance(json_paths, list) else [json_paths]
+        self.metadata = {}
+        for json_path in self.json_paths:
+            with open(json_path, 'r') as f:
+                data = json.load(f)
+                self.metadata.update(data["Actions"])
+        self.action_folders = []
+        for data_dir in self.data_dirs:
+            self.action_folders.extend([d for d in os.listdir(data_dir) if d.endswith(".pt")])
+        self.num_frames = num_frames
+        self.split = split
+        self.curriculum = curriculum
+        self.preload = preload
+        self.action_normalization = {
+            "standing tackle": "Standing Tackling", "tackle": "Tackling", "high leg": "High Leg",
+            "dont know": None, "": None, "challenge": "Challenge", "dive": "Dive",
+            "elbowing": "Elbowing", "holding": "Holding", "pushing": "Pushing", "high Leg": "High Leg"
+        }
+        
+        self.valid_action_folders = []
+        self.foul_labels = []
+        self.action_labels = []
+        self.folder_to_dir = {}
+        
+        for data_dir in self.data_dirs:
+            for folder in os.listdir(data_dir):
+                if not folder.endswith(".pt"):
+                    continue
+                action_id = folder.replace(".pt", "").replace("action_", "")
+                if action_id not in self.metadata:
+                    continue
+                offence = self.metadata[action_id]["Offence"].lower()
+                severity_str = self.metadata[action_id]["Severity"]
+                action_class = self.metadata[action_id]["Action class"].lower()
+                
+                normalized_action = self.action_normalization.get(action_class, action_class.title())
+                if normalized_action is None or normalized_action not in self.action_map:
+                    continue
+                
+                if (offence == '' or offence == 'between') and normalized_action != 'Dive':
+                    continue
+                if (severity_str == '' or severity_str == '2.0' or severity_str == '4.0') and \
+                   normalized_action != 'Dive' and offence != 'no offence':
+                    continue
+                
+                if offence == '' or offence == 'between':
+                    offence = 'offence'
+                if severity_str == '' or severity_str == '2.0' or severity_str == '4.0':
+                    severity_str = '1.0'
+                
+                if offence == 'no offence':
+                    foul_label = 0
+                elif offence == 'offence':
+                    severity = float(severity_str)
+                    if severity == 1.0:
+                        foul_label = 1
+                    elif severity == 3.0:
+                        foul_label = 2
+                    elif severity == 5.0:
+                        foul_label = 3
+                    else:
+                        continue
+                else:
+                    continue
+                
+                action_label = self.action_map[normalized_action]
+                
+                self.valid_action_folders.append(folder)
+                self.foul_labels.append(foul_label)
+                self.action_labels.append(action_label)
+                self.folder_to_dir[folder] = data_dir
+        
+        self.action_folders = self.valid_action_folders
+        
+        if self.preload:
+            print(f"Preloading {len(self.action_folders)} .pt files for {split} split...")
+            self.clips_cache = {}
+            for folder in self.action_folders:
+                action_id = folder.replace(".pt", "").replace("action_", "")
+                action_path = os.path.join(self.folder_to_dir[folder], folder)
+                clips = torch.load(action_path, weights_only=False).float() / 255.0
+                if clips.shape[0] == 1:
+                    clips = torch.stack([clips[0], clips[0]])
+                else:
+                    random_idx = torch.randint(1, clips.shape[0], (1,)).item()
+                    clips = torch.stack([clips[0], clips[random_idx]])
+                self.clips_cache[action_id] = clips
+        
+        if self.curriculum and self.split == 'train':
+            indices = []
+            for i in range(len(self.action_folders)):
+                action_factor = 1 if self.action_labels[i] not in [5, 6, 7] else (3 if self.action_labels[i] == 5 else 2)
+                foul_factor = 5 if self.foul_labels[i] in [0, 3] else (2 if self.foul_labels[i] == 2 else 1)
+                factor = min(max(action_factor, foul_factor), 5)
+                indices.extend([i] * factor)
+            self.indices = indices
+            print(f"Number of samples after oversampling: {len(self.indices)}")
+        else:
+            self.indices = list(range(len(self.action_folders)))
+            print(f"Number of samples: {len(self.indices)}")
+
+    def __len__(self):
+        return len(self.indices)
+
+    def __getitem__(self, idx):
+        actual_idx = self.indices[idx]
+        action_id = self.action_folders[actual_idx].replace(".pt", "").replace("action_", "")
+        if self.preload:
+            clips = self.clips_cache[action_id]
+        else:
+            action_path = os.path.join(self.folder_to_dir[self.action_folders[actual_idx]], self.action_folders[actual_idx])
+            clips = torch.load(action_path, weights_only=False).float() / 255.0
+            if clips.shape[0] == 1:
+                clips = torch.stack([clips[0], clips[0]])
+            else:
+                random_idx = torch.randint(1, clips.shape[0], (1,)).item()
+                clips = torch.stack([clips[0], clips[random_idx]])
+        return clips, torch.tensor(self.foul_labels[actual_idx]), torch.tensor(self.action_labels[actual_idx]), action_id
+
+def custom_collate(batch):
+    clips = torch.stack([item[0] for item in batch])
+    foul_labels = torch.tensor([item[1].item() for item in batch], dtype=torch.long)
+    action_labels = torch.tensor([item[2].item() for item in batch], dtype=torch.long)
+    action_ids = [item[3] for item in batch]
+    return clips, foul_labels, action_labels, action_ids
+
+def compute_class_weights(json_paths, foul_map, action_map):
+    metadata = {}
+    for json_path in json_paths if isinstance(json_paths, list) else [json_paths]:
+        with open(json_path, 'r') as f:
+            data = json.load(f)
+            metadata.update(data["Actions"])
+    action_normalization = {
+        "standing tackle": "Standing Tackling", "tackle": "Tackling", "high leg": "High Leg",
+        "dont know": None, "": None, "challenge": "Challenge", "dive": "Dive",
+        "elbowing": "Elbowing", "holding": "Holding", "pushing": "Pushing", "high Leg": "High Leg"
+    }
+    foul_labels = []
+    action_labels = []
+    for action_id, video in metadata.items():
+        offence = video["Offence"].lower()
+        severity_str = video["Severity"]
+        action_class = video["Action class"].lower()
+        normalized_action = action_normalization.get(action_class, action_class.title())
+        if normalized_action is None or normalized_action not in action_map:
+            continue
+        if (offence == '' or offence == 'between') and normalized_action != 'Dive':
+            continue
+        if (severity_str == '' or severity_str == '2.0' or severity_str == '4.0') and \
+           normalized_action != 'Dive' and offence != 'no offence':
+            continue
+        if offence == '' or offence == 'between':
+            offence = 'offence'
+        if severity_str == '' or severity_str == '2.0' or severity_str == '4.0':
+            severity_str = '1.0'
+        if offence == 'no offence':
+            foul_label = 0
+        elif offence == 'offence':
+            severity = float(severity_str)
+            if severity == 1.0:
+                foul_label = 1
+            elif severity == 3.0:
+                foul_label = 2
+            elif severity == 5.0:
+                foul_label = 3
+            else:
+                continue
+        else:
+            continue
+        action_label = action_map[normalized_action]
+        foul_labels.append(foul_label)
+        action_labels.append(action_label)
+    foul_counts = torch.bincount(torch.tensor(foul_labels), minlength=len(foul_map))
+    action_counts = torch.bincount(torch.tensor(action_labels), minlength=len(action_map))
+    foul_weights = 1.0 / torch.sqrt(foul_counts.float() + 1e-6)
+    action_weights = 1.0 / torch.sqrt(action_counts.float() + 1e-6)
+    return foul_weights / foul_weights.sum(), action_weights / action_weights.sum(), foul_counts, action_counts
+
+def print_unique_values_and_frequencies(dataset, split_name, foul_counts, action_counts):
+    action_classes = set()
+    severities = set()
+    offences = set()
+    for folder in dataset.action_folders:
+        action_id = folder.replace(".pt", "").replace("action_", "")
+        meta = dataset.metadata[action_id]
+        action_classes.add(meta["Action class"])
+        severities.add(meta["Severity"] if meta["Severity"] else "Empty")
+        offences.add(meta["Offence"] if meta["Offence"] else "Empty")
+    print(f"\nUnique values for {split_name} split:")
+    print(f"Action classes: {sorted(action_classes)}")
+    print(f"Severities: {sorted(severities)}")
+    print(f"Offences: {sorted(offences)}")
+    foul_labels_map = {0: "No Offence", 1: "Offence Severity 1", 2: "Offence Severity 3", 3: "Offence Severity 5"}
+    print(f"\nFoul label frequencies for {split_name} split:")
+    for label, count in enumerate(foul_counts):
+        print(f"{foul_labels_map[label]}: {int(count)}")
+    action_labels_map = {v: k for k, v in MVFoulDataset.action_map.items()}
+    print(f"\nAction label frequencies for {split_name} split:")
+    for label, count in enumerate(action_counts):
+        print(f"{action_labels_map[label]}: {int(count)}")
+
+def generate_predictions_json(action_ids, logits, task_name):
+    predictions = {"Actions": {}}
+    reverse_foul_map = {v: k for k, v in MVFoulDataset.foul_map.items()}
+    reverse_action_map = {v: k for k, v in MVFoulDataset.action_map.items()}
+    
+    for action_id, logit in zip(action_ids, logits):
+        probs = torch.softmax(logit, dim=0).detach().cpu().numpy()
+        pred_idx = torch.argmax(logit).item()
+        if task_name == "Foul":
+            pred_label = reverse_foul_map[pred_idx]
+            if pred_label == "No Offence":
+                offence = "No offence"
+                severity = ""
+            else:
+                offence = "Offence"
+                severity = pred_label.split("Severity ")[1]
+            predictions["Actions"][action_id] = {
+                "Offence": offence,
+                "Severity": severity,
+                "confidence": float(probs[pred_idx])
+            }
+        else:  # Action
+            pred_label = reverse_action_map[pred_idx]
+            predictions["Actions"][action_id] = {
+                "Action class": pred_label,
+                "confidence": float(probs[pred_idx])
+            }
+    return predictions
+
+def generate_groundtruth_json(dataset, task_name):
+    groundtruth = {"Actions": {}}
+    reverse_foul_map = {v: k for k, v in dataset.foul_map.items()}
+    reverse_action_map = {v: k for k, v in dataset.action_map.items()}
+    
+    for idx in range(len(dataset.action_folders)):
+        action_id = dataset.action_folders[idx].replace(".pt", "").replace("action_", "")
+        action_class = reverse_action_map[dataset.action_labels[idx]]
+        if task_name == "Foul":
+            foul_label = reverse_foul_map[dataset.foul_labels[idx]]
+            if foul_label == "No Offence":
+                offence = "No offence"
+                severity = ""
+            else:
+                offence = "Offence"
+                severity = foul_label.split("Severity ")[1]
+            groundtruth["Actions"][action_id] = {
+                "Action class": action_class,
+                "Offence": offence,
+                "Severity": severity
+            }
+        else:  # Action
+            action_label = reverse_action_map[dataset.action_labels[idx]]
+            groundtruth["Actions"][action_id] = {
+                "Action class": action_label
+            }
+    return groundtruth
+
+def custom_evaluate(predictions, groundtruth, task_name):
+    if task_name == "Foul":
+        num_classes = 4
+        class_names = ["No offence", "Offence Severity 1", "Offence Severity 3", "Offence Severity 5"]
+    else:  # Action
+        num_classes = 8
+        class_names = list(MVFoulDataset.action_map.keys())
+    
+    true_counts = np.zeros(num_classes)
+    pred_correct = np.zeros(num_classes)
+    
+    for action_id in groundtruth["Actions"]:
+        true_action = groundtruth["Actions"][action_id]["Action class"]
+        if task_name == "Foul":
+            true_offence = groundtruth["Actions"][action_id]["Offence"]
+            true_severity = groundtruth["Actions"][action_id]["Severity"]
+            if true_offence == "No offence":
+                true_idx = 0
+            elif true_offence == "Offence":
+                if true_severity == "1":
+                    true_idx = 1
+                elif true_severity == "3":
+                    true_idx = 2
+                elif true_severity == "5":
+                    true_idx = 3
+                else:
+                    continue
+            else:
+                continue
+            true_counts[true_idx] += 1
+        else:
+            true_idx = MVFoulDataset.action_map[true_action]
+            true_counts[true_idx] += 1
+        
+        if action_id in predictions["Actions"]:
+            if task_name == "Foul":
+                pred_offence = predictions["Actions"][action_id]["Offence"]
+                pred_severity = predictions["Actions"][action_id]["Severity"]
+                if pred_offence == true_offence and pred_severity == true_severity:
+                    pred_correct[true_idx] += 1
+            else:
+                pred_action = predictions["Actions"][action_id]["Action class"]
+                if pred_action == true_action:
+                    pred_correct[true_idx] += 1
+    
+    accuracy = sum(pred_correct) / sum(true_counts) if sum(true_counts) > 0 else 0.0
+    per_class_acc = {}
+    for i, name in enumerate(class_names):
+        per_class_acc[name] = pred_correct[i] / true_counts[i] if true_counts[i] > 0 else 0.0
+    ba = np.mean(pred_correct / true_counts) if sum(true_counts) > 0 else 0.0
+    
+    if task_name == "Foul":
+        return {
+            "accuracy_offence_severity": accuracy * 100,
+            "balanced_accuracy_offence_severity": ba * 100,
+            "per_class_offence": per_class_acc
+        }
+    else:
+        return {
+            "accuracy_action": accuracy * 100,
+            "balanced_accuracy_action": ba * 100,
+            "per_class_action": per_class_acc
+        }
+
+def compute_balanced_accuracy(true_labels, pred_labels, num_classes):
+    per_class_acc = []
+    for cls in range(num_classes):
+        cls_true = [1 if t == cls else 0 for t in true_labels]
+        cls_pred = [1 if p == cls else 0 for p in pred_labels]
+        correct = sum(1 for t, p in zip(cls_true, cls_pred) if t == 1 and p == 1)
+        total = sum(cls_true)
+        acc = correct / total if total > 0 else 0.0
+        per_class_acc.append(acc)
+    return sum(per_class_acc) / len(per_class_acc) if per_class_acc else 0.0
+
 
 # CAMBIO: Añadir más augmentations y opción de mixup/cutmix
 def get_augmentations(device, use_extra_aug=True):
