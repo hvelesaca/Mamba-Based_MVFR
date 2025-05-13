@@ -230,6 +230,29 @@ def compute_class_weights(json_paths, foul_map, action_map):
     action_weights = 1.0 / torch.sqrt(action_counts.float() + 1e-6)
     return foul_weights / foul_weights.sum(), action_weights / action_weights.sum(), foul_counts, action_counts
 
+def print_unique_values_and_frequencies(dataset, split_name, foul_counts, action_counts):
+    action_classes = set()
+    severities = set()
+    offences = set()
+    for folder in dataset.action_folders:
+        action_id = folder.replace(".pt", "").replace("action_", "")
+        meta = dataset.metadata[action_id]
+        action_classes.add(meta["Action class"])
+        severities.add(meta["Severity"] if meta["Severity"] else "Empty")
+        offences.add(meta["Offence"] if meta["Offence"] else "Empty")
+    print(f"\nUnique values for {split_name} split:")
+    print(f"Action classes: {sorted(action_classes)}")
+    print(f"Severities: {sorted(severities)}")
+    print(f"Offences: {sorted(offences)}")
+    foul_labels_map = {0: "No Offence", 1: "Offence Severity 1", 2: "Offence Severity 3", 3: "Offence Severity 5"}
+    print(f"\nFoul label frequencies for {split_name} split:")
+    for label, count in enumerate(foul_counts):
+        print(f"{foul_labels_map[label]}: {int(count)}")
+    action_labels_map = {v: k for k, v in MVFoulDataset.action_map.items()}
+    print(f"\nAction label frequencies for {split_name} split:")
+    for label, count in enumerate(action_counts):
+        print(f"{action_labels_map[label]}: {int(count)}")
+
 def generate_predictions_json(action_ids, logits, task_name):
     predictions = {"Actions": {}}
     reverse_foul_map = {v: k for k, v in MVFoulDataset.foul_map.items()}
