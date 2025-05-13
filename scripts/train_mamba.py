@@ -510,7 +510,8 @@ def train_model(
 
     augment = get_augmentations(device, use_extra_aug=use_extra_aug) if "train" in train_loader.dataset.split else nn.Identity()
 
-    optimizer = optim.AdamW(model.parameters(), lr=5e-5, weight_decay=0.01)
+    optimizer = optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-2)
+    #optimizer = optim.AdamW(model.parameters(), lr=5e-5, weight_decay=0.01)
     if scheduler_type == "cosine":
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
     else:
