@@ -593,8 +593,8 @@ def train_model(
                 with autocast():
                     foul_logits, action_logits = model(batch_clips)
                     if use_focal_loss:
-                        foul_loss = ClassBalancedFocalLoss()(foul_logits, foul_labels)
-                        action_loss = ClassBalancedFocalLoss()(action_logits, action_labels)
+                        foul_loss = FocalLoss()(foul_logits, foul_labels)
+                        action_loss = FocalLoss()(action_logits, action_labels)
                     elif use_mixup:
                         foul_loss = mixup_criterion(foul_criterion, foul_logits, foul_labels_a, foul_labels_b, lam)
                         action_loss = mixup_criterion(action_criterion, action_logits, action_labels_a, action_labels_b, lam)
@@ -675,8 +675,8 @@ def train_model(
                 with autocast():
                     foul_logits, action_logits = model(batch_clips)
                     if use_focal_loss:
-                        foul_loss = ClassBalancedFocalLoss()(foul_logits, foul_labels)
-                        action_loss = ClassBalancedFocalLoss()(action_logits, action_labels)
+                        foul_loss = FocalLoss()(foul_logits, foul_labels)
+                        action_loss = FocalLoss()(action_logits, action_labels)
                     else:
                         foul_loss = foul_criterion(foul_logits, foul_labels)
                         action_loss = action_criterion(action_logits, action_labels)
