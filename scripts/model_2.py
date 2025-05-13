@@ -60,7 +60,7 @@ class ViewMambaAggregate(nn.Module):
 # =========================
 # Modelo Multi-tarea Mejorado
 # =========================
-class ImprovedMultiTaskModel(nn.Module):
+class MultiTaskModelMamba(nn.Module):
     def __init__(self, dropout=0.5, drop_path_rate=0.1):
         super().__init__()
         self.backbone = video_models.mvit_v2_s(weights=video_models.MViT_V2_S_Weights.KINETICS400_V1)
@@ -131,7 +131,7 @@ class ImprovedMultiTaskModel(nn.Module):
 # =========================
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = ImprovedMultiTaskModel().to(device)
+    model = MultiTaskModelMamba().to(device)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-2)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=50)
