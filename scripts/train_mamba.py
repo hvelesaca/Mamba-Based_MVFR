@@ -171,6 +171,196 @@ class MVFoulDataset(Dataset):
 
         return clips, torch.tensor(self.foul_labels[actual_idx]), torch.tensor(self.action_labels[actual_idx]), action_id
 
+def custom_collate(batch):
+    clips = torch.stack([item[0] for item in batch])
+    foul_labels = torch.tensor([item[1].item() for item in batch], dtype=torch.long)
+    action_labels = torch.tensor([item[2].item() for item in batch], dtype=torch.long)
+    action_ids = [item[3] for item in batch]
+    return clips, foul_labels, action_labels, action_ids
+
+def compute_class_weights(json_paths, foul_map, action_map):
+    metadata = {}
+    for json_path in json_paths if isinstance(json_paths, list) else [json_paths]:
+        with open(json_path, 'r') as f:
+            data = json.load(f)
+            metadata.update(data["Actions"])
+    action_normalization = {
+        "standing tackle": "Standing Tackling", "tackle": "Tackling", "high leg": "High Leg",
+        "dont know": None, "": None, "challenge": "Challenge", "dive": "Dive",
+        "elbowing": "Elbowing", "holding": "Holding", "pushing": "Pushing", "high Leg": "High Leg"
+    }
+    foul_labels = []
+    action_labels = []
+    for action_id, video in metadata.items():
+        offence = video["Offence"].lower()
+        severity_str = video["Severity"]
+        action_class = video["Action class"].lower()
+        normalized_action = action_normalization.get(action_class, action_class.title())
+        if normalized_action is None or normalized_action not in action_map:
+            continue
+        if (offence == '' or offence == 'between') and normalized_action != 'Dive':
+            continue
+        if (severity_str == '' or severity_str == '2.0' or severity_str == '4.0') and \
+           normalized_action != 'Dive' and offence != 'no offence':
+            continue
+        if offence == '' or offence == 'between':
+            offence = 'offence'
+        if severity_str == '' or severity_str == '2.0' or severity_str == '4.0':
+            severity_str = '1.0'
+        if offence == 'no offence':
+            foul_label = 0
+        elif offence == 'offence':
+            severity = float(severity_str)
+            if severity == 1.0:
+                foul_label = 1
+            elif severity == 3.0:
+                foul_label = 2
+            elif severity == 5.0:
+                foul_label = 3
+            else:
+                continue
+        else:
+            continue
+        action_label = action_map[normalized_action]
+        foul_labels.append(foul_label)
+        action_labels.append(action_label)
+    foul_counts = torch.bincount(torch.tensor(foul_labels), minlength=len(foul_map))
+    action_counts = torch.bincount(torch.tensor(action_labels), minlength=len(action_map))
+    foul_weights = 1.0 / torch.sqrt(foul_counts.float() + 1e-6)
+    action_weights = 1.0 / torch.sqrt(action_counts.float() + 1e-6)
+    return foul_weights / foul_weights.sum(), action_weights / action_weights.sum(), foul_counts, action_counts
+
+def generate_predictions_json(action_ids, logits, task_name):
+    predictions = {"Actions": {}}
+    reverse_foul_map = {v: k for k, v in MVFoulDataset.foul_map.items()}
+    reverse_action_map = {v: k for k, v in MVFoulDataset.action_map.items()}
+    
+    for action_id, logit in zip(action_ids, logits):
+        probs = torch.softmax(logit, dim=0).detach().cpu().numpy()
+        pred_idx = torch.argmax(logit).item()
+        if task_name == "Foul":
+            pred_label = reverse_foul_map[pred_idx]
+            if pred_label == "No Offence":
+                offence = "No offence"
+                severity = ""
+            else:
+                offence = "Offence"
+                severity = pred_label.split("Severity ")[1]
+            predictions["Actions"][action_id] = {
+                "Offence": offence,
+                "Severity": severity,
+                "confidence": float(probs[pred_idx])
+            }
+        else:  # Action
+            pred_label = reverse_action_map[pred_idx]
+            predictions["Actions"][action_id] = {
+                "Action class": pred_label,
+                "confidence": float(probs[pred_idx])
+            }
+    return predictions
+
+def generate_groundtruth_json(dataset, task_name):
+    groundtruth = {"Actions": {}}
+    reverse_foul_map = {v: k for k, v in dataset.foul_map.items()}
+    reverse_action_map = {v: k for k, v in dataset.action_map.items()}
+    
+    for idx in range(len(dataset.action_folders)):
+        action_id = dataset.action_folders[idx].replace(".pt", "").replace("action_", "")
+        action_class = reverse_action_map[dataset.action_labels[idx]]
+        if task_name == "Foul":
+            foul_label = reverse_foul_map[dataset.foul_labels[idx]]
+            if foul_label == "No Offence":
+                offence = "No offence"
+                severity = ""
+            else:
+                offence = "Offence"
+                severity = foul_label.split("Severity ")[1]
+            groundtruth["Actions"][action_id] = {
+                "Action class": action_class,
+                "Offence": offence,
+                "Severity": severity
+            }
+        else:  # Action
+            action_label = reverse_action_map[dataset.action_labels[idx]]
+            groundtruth["Actions"][action_id] = {
+                "Action class": action_label
+            }
+    return groundtruth
+
+def custom_evaluate(predictions, groundtruth, task_name):
+    if task_name == "Foul":
+        num_classes = 4
+        class_names = ["No offence", "Offence Severity 1", "Offence Severity 3", "Offence Severity 5"]
+    else:  # Action
+        num_classes = 8
+        class_names = list(MVFoulDataset.action_map.keys())
+    
+    true_counts = np.zeros(num_classes)
+    pred_correct = np.zeros(num_classes)
+    
+    for action_id in groundtruth["Actions"]:
+        true_action = groundtruth["Actions"][action_id]["Action class"]
+        if task_name == "Foul":
+            true_offence = groundtruth["Actions"][action_id]["Offence"]
+            true_severity = groundtruth["Actions"][action_id]["Severity"]
+            if true_offence == "No offence":
+                true_idx = 0
+            elif true_offence == "Offence":
+                if true_severity == "1":
+                    true_idx = 1
+                elif true_severity == "3":
+                    true_idx = 2
+                elif true_severity == "5":
+                    true_idx = 3
+                else:
+                    continue
+            else:
+                continue
+            true_counts[true_idx] += 1
+        else:
+            true_idx = MVFoulDataset.action_map[true_action]
+            true_counts[true_idx] += 1
+        
+        if action_id in predictions["Actions"]:
+            if task_name == "Foul":
+                pred_offence = predictions["Actions"][action_id]["Offence"]
+                pred_severity = predictions["Actions"][action_id]["Severity"]
+                if pred_offence == true_offence and pred_severity == true_severity:
+                    pred_correct[true_idx] += 1
+            else:
+                pred_action = predictions["Actions"][action_id]["Action class"]
+                if pred_action == true_action:
+                    pred_correct[true_idx] += 1
+    
+    accuracy = sum(pred_correct) / sum(true_counts) if sum(true_counts) > 0 else 0.0
+    per_class_acc = {}
+    for i, name in enumerate(class_names):
+        per_class_acc[name] = pred_correct[i] / true_counts[i] if true_counts[i] > 0 else 0.0
+    ba = np.mean(pred_correct / true_counts) if sum(true_counts) > 0 else 0.0
+    
+    if task_name == "Foul":
+        return {
+            "accuracy_offence_severity": accuracy * 100,
+            "balanced_accuracy_offence_severity": ba * 100,
+            "per_class_offence": per_class_acc
+        }
+    else:
+        return {
+            "accuracy_action": accuracy * 100,
+            "balanced_accuracy_action": ba * 100,
+            "per_class_action": per_class_acc
+        }
+
+def compute_balanced_accuracy(true_labels, pred_labels, num_classes):
+    per_class_acc = []
+    for cls in range(num_classes):
+        cls_true = [1 if t == cls else 0 for t in true_labels]
+        cls_pred = [1 if p == cls else 0 for p in pred_labels]
+        correct = sum(1 for t, p in zip(cls_true, cls_pred) if t == 1 and p == 1)
+        total = sum(cls_true)
+        acc = correct / total if total > 0 else 0.0
+        per_class_acc.append(acc)
+    return sum(per_class_acc) / len(per_class_acc) if per_class_acc else 0.0
 
 def train_model(model, train_loader, val_loader, foul_criterion, action_criterion, num_epochs=200, device="cuda:0"):
     model = model.to(device)
@@ -433,8 +623,8 @@ if __name__ == "__main__":
         "/kaggle/input/datasetmvfd/datasetMVFD/test_preprocessed/annotations.json", val_dataset.foul_map, val_dataset.action_map
     )
 
-    print(train_dataset, "Training (Train+Valid)", train_foul_counts, train_action_counts)
-    print(val_dataset, "Validation (Test)", val_foul_counts, val_action_counts)
+    print_unique_values_and_frequencies(train_dataset, "Training (Train+Valid)", train_foul_counts, train_action_counts)
+    print_unique_values_and_frequencies(val_dataset, "Validation (Test)", val_foul_counts, val_action_counts)
 
     print(f"Training dataset size (original): {len(train_dataset.action_folders)}")
     print(f"Training dataset size (with curriculum): {len(train_dataset)}")
