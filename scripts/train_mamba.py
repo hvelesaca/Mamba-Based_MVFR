@@ -9,6 +9,7 @@ from model_2 import SimpleFoulModel, SimpleActionModel, MultiTaskModel, MultiTas
 from tqdm import tqdm
 import numpy as np
 import kornia.augmentation as K
+from torch.utils.data import WeightedRandomSampler
 
 # CAMBIO: Importar augmentaciones adicionales y focal loss
 from torchvision.transforms import RandomErasing
@@ -788,7 +789,20 @@ if __name__ == "__main__":
     print(f"Training dataset size (with curriculum): {len(train_dataset)}")
     print(f"Validation dataset size: {len(val_dataset)}")
 
-    train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, collate_fn=custom_collate, num_workers=0, pin_memory=True, drop_last=True)
+    # Calcula los pesos inversos para cada clase
+    foul_sample_weights = [1.0 / train_foul_counts[label] for label in train_dataset.foul_labels]
+    action_sample_weights = [1.0 / train_action_counts[label] for label in train_dataset.action_labels]
+    
+    # Combina los pesos (puedes usar suma, promedio o máximo)
+    combined_sample_weights = [
+        (foul_w + action_w) / 2
+        for foul_w, action_w in zip(foul_sample_weights, action_sample_weights)
+    ]
+    
+    # Crea el sampler
+    sampler = WeightedRandomSampler(combined_sample_weights, num_samples=len(train_dataset), replacement=True)
+
+    train_loader = DataLoader(train_dataset, sampler=sampler, batch_size=8, shuffle=False, collate_fn=custom_collate, num_workers=0, pin_memory=True, drop_last=True)
     val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False, collate_fn=custom_collate, num_workers=0, pin_memory=True)
 
     print("\nTraining MultiTaskMamba Model...")
