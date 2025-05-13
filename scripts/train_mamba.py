@@ -512,7 +512,7 @@ def train_model(
                 # CAMBIO: Mixup/Cutmix (solo si se activa)
                 if use_mixup:
                     batch_clips, foul_labels_a, foul_labels_b, lam = mixup_data(batch_clips, foul_labels)
-                    -, action_labels_a, action_labels_b, _ = mixup_data(batch_clips, action_labels)
+                    _ , action_labels_a, action_labels_b, _ = mixup_data(batch_clips, action_labels)
                 # (Cutmix no implementado aquí por simplicidad, pero puedes añadirlo similar a mixup)
 
                 with autocast():
