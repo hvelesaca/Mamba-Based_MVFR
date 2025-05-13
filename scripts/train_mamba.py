@@ -732,8 +732,8 @@ if __name__ == "__main__":
     print(f"Training dataset size (with curriculum): {len(train_dataset)}")
     print(f"Validation dataset size: {len(val_dataset)}")
 
-    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, collate_fn=custom_collate, num_workers=0, pin_memory=True, drop_last=True)
-    val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False, collate_fn=custom_collate, num_workers=0, pin_memory=True)
+    train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, collate_fn=custom_collate, num_workers=0, pin_memory=True, drop_last=True)
+    val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False, collate_fn=custom_collate, num_workers=0, pin_memory=True)
 
     print("\nTraining MultiTaskMamba Model...")
     multitask_model = MultiTaskModelMamba()
