@@ -443,8 +443,12 @@ def train_model(
     model, train_loader, val_loader, foul_criterion, action_criterion,
     num_epochs=200, device="cuda:0",
     use_focal_loss=False, use_mixup=False, use_cutmix=False, use_extra_aug=True,
-    scheduler_type="onecycle"
-):
+    scheduler_type="onecycle"):
+
+    if torch.cuda.device_count() > 1:
+        print("Usando", torch.cuda.device_count(), "GPUs")
+        model = torch.nn.DataParallel(model)
+
     model = model.to(device)
 
     augment = get_augmentations(device, use_extra_aug=use_extra_aug) if "train" in train_loader.dataset.split else nn.Identity()
