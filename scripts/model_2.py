@@ -4,7 +4,9 @@ import torchvision.models.video as video_models
 import torch.nn.functional as F
 from mamba_ssm import Mamba
 
+# =========================
 # Utility functions
+# =========================
 def batch_tensor(tensor, dim=1, squeeze=False):
     shape = list(tensor.shape)
     B = shape[0]
@@ -26,31 +28,81 @@ def unbatch_tensor(tensor, B, dim=1, unsqueeze=False):
         shape[0] = B * V
     return tensor.reshape(shape)
 
-# Existing ViewAvgAggregate
+# =========================
+# Simple Attention Layer (NUEVO)
+# =========================
+class SimpleAttention(nn.Module):
+    """
+    Simple self-attention layer for sequence aggregation.
+    """
+    def __init__(self, d_model):
+        super().__init__()
+        self.query = nn.Linear(d_model, d_model)
+        self.key = nn.Linear(d_model, d_model)
+        self.value = nn.Linear(d_model, d_model)
+        self.softmax = nn.Softmax(dim=1)
+
+    def forward(self, x):
+        # x: [B, V, D]
+        Q = self.query(x)
+        K = self.key(x)
+        Vv = self.value(x)
+        attn_scores = torch.bmm(Q, K.transpose(1, 2)) / (Q.shape[-1] ** 0.5)
+        attn_weights = self.softmax(attn_scores)
+        out = torch.bmm(attn_weights, Vv)
+        # Aggregate over views (mean)
+        return out.mean(dim=1)
+
+# =========================
+# ViewAvgAggregate Mejorado
+# =========================
 class ViewAvgAggregate(nn.Module):
-    def __init__(self, model, lifting_net=nn.Sequential(), agr_type='mean'):
+    def __init__(self, model, lifting_net=None, agr_type='mean', use_attention=True):
         super().__init__()
         self.model = model
-        self.lifting_net = lifting_net
+        # CAMBIO: lifting_net real
+        if lifting_net is None:
+            self.lifting_net = nn.Sequential(
+                nn.Linear(512, 512),
+                nn.ReLU(),
+                nn.BatchNorm1d(512)
+            )
+        else:
+            self.lifting_net = lifting_net
         self.agr_type = agr_type
+        # CAMBIO: atención opcional
+        self.use_attention = use_attention
+        if use_attention:
+            self.attention = SimpleAttention(512)
+        else:
+            self.attention = None
 
     def forward(self, mvimages):
         B, V, C, T, H, W = mvimages.shape
         batched = batch_tensor(mvimages, dim=1, squeeze=True)
         features = self.model(batched)
         features = unbatch_tensor(features, B, dim=1, unsqueeze=True)
+        # CAMBIO: lifting_net real
         features = self.lifting_net(features)
-        if self.agr_type == 'mean':
-            pooled_view = torch.mean(features, dim=1)
-        elif self.agr_type == 'max':
-            pooled_view = torch.max(features, dim=1)[0]
+        # CAMBIO: atención
+        if self.use_attention and self.attention is not None:
+            pooled_view = self.attention(features)
         else:
-            raise ValueError(f"Unknown aggregation type: {self.agr_type}")
+            if self.agr_type == 'mean':
+                pooled_view = torch.mean(features, dim=1)
+            elif self.agr_type == 'max':
+                pooled_view = torch.max(features, dim=1)[0]
+            else:
+                raise ValueError(f"Unknown aggregation type: {self.agr_type}")
+        # CAMBIO: BatchNorm extra después de agregación
+        pooled_view = nn.BatchNorm1d(512).to(pooled_view.device)(pooled_view)
         return pooled_view, features
 
-# Updated ViewMambaAggregate
+# =========================
+# ViewMambaAggregate Mejorado
+# =========================
 class ViewMambaAggregate(nn.Module):
-    def __init__(self, model, d_model=512, d_state=16, d_conv=4, expand=2):
+    def __init__(self, model, d_model=512, d_state=16, d_conv=4, expand=2, use_attention=True):
         super().__init__()
         self.model = model
         self.mamba = Mamba(
@@ -59,23 +111,42 @@ class ViewMambaAggregate(nn.Module):
             d_conv=d_conv,
             expand=expand
         )
-        self.lifting_net = nn.Sequential()
+        # CAMBIO: lifting_net real
+        self.lifting_net = nn.Sequential(
+            nn.Linear(d_model, d_model),
+            nn.ReLU(),
+            nn.BatchNorm1d(d_model)
+        )
+        # CAMBIO: atención opcional
+        self.use_attention = use_attention
+        if use_attention:
+            self.attention = SimpleAttention(d_model)
+        else:
+            self.attention = None
 
     def forward(self, mvimages):
         B, V, C, T, H, W = mvimages.shape
-        batched = batch_tensor(mvimages, dim=1, squeeze=True)  # [B*V*T, C, H, W]
-        features = self.model(batched)  # [B*V, feat_dim]
-        features = unbatch_tensor(features, B, dim=1, unsqueeze=True)  # [B, V, feat_dim]
-        
-        # Ensure features are in [B, L, D] format for Mamba
-        mamba_out = self.mamba(features)  # [B, V, feat_dim]
-        pooled_view = mamba_out[:, -1, :]  # [B, feat_dim]
-        features = self.lifting_net(mamba_out)
-        return pooled_view, features
+        batched = batch_tensor(mvimages, dim=1, squeeze=True)
+        features = self.model(batched)
+        features = unbatch_tensor(features, B, dim=1, unsqueeze=True)
+        mamba_out = self.mamba(features)
+        # CAMBIO: lifting_net real
+        mamba_out = self.lifting_net(mamba_out)
+        # CAMBIO: atención
+        if self.use_attention and self.attention is not None:
+            pooled_view = self.attention(mamba_out)
+        else:
+            pooled_view = mamba_out[:, -1, :]
+        # CAMBIO: BatchNorm extra después de agregación
+        pooled_view = nn.BatchNorm1d(mamba_out.shape[-1]).to(pooled_view.device)(pooled_view)
+        return pooled_view, mamba_out
 
-# Existing models (unchanged)
+# =========================
+# Modelos mejorados
+# =========================
+
 class SimpleFoulModel(nn.Module):
-    def __init__(self, agr_type='mean'):
+    def __init__(self, agr_type='mean', dropout=0.4):
         super(SimpleFoulModel, self).__init__()
         self.backbone = video_models.mvit_v2_s(weights=video_models.MViT_V2_S_Weights.KINETICS400_V1)
         for param in self.backbone.parameters():
@@ -83,7 +154,13 @@ class SimpleFoulModel(nn.Module):
         in_features = self.backbone.head[1].in_features
         self.backbone.head[1] = nn.Linear(in_features, 512)
         self.feat_dim = 512
-        self.aggregation_model = ViewAvgAggregate(model=self.backbone, lifting_net=nn.Sequential(), agr_type=agr_type)
+        # CAMBIO: lifting_net y atención
+        self.aggregation_model = ViewAvgAggregate(
+            model=self.backbone,
+            lifting_net=None,
+            agr_type=agr_type,
+            use_attention=True
+        )
         self.inter = nn.Sequential(
             nn.LayerNorm(self.feat_dim),
             nn.Linear(self.feat_dim, self.feat_dim),
@@ -95,7 +172,7 @@ class SimpleFoulModel(nn.Module):
             nn.LayerNorm(self.feat_dim),
             nn.Linear(self.feat_dim, 256),
             nn.ReLU(),
-            nn.Dropout(0.3),
+            nn.Dropout(dropout),  # CAMBIO: dropout configurable
             nn.Linear(256, 4)
         )
 
@@ -114,7 +191,7 @@ class SimpleFoulModel(nn.Module):
         return foul_logits
 
 class SimpleActionModel(nn.Module):
-    def __init__(self, agr_type='mean'):
+    def __init__(self, agr_type='mean', dropout=0.4):
         super(SimpleActionModel, self).__init__()
         self.backbone = video_models.mvit_v2_s(weights=video_models.MViT_V2_S_Weights.KINETICS400_V1)
         for param in self.backbone.parameters():
@@ -122,7 +199,13 @@ class SimpleActionModel(nn.Module):
         in_features = self.backbone.head[1].in_features
         self.backbone.head[1] = nn.Linear(in_features, 512)
         self.feat_dim = 512
-        self.aggregation_model = ViewAvgAggregate(model=self.backbone, lifting_net=nn.Sequential(), agr_type=agr_type)
+        # CAMBIO: lifting_net y atención
+        self.aggregation_model = ViewAvgAggregate(
+            model=self.backbone,
+            lifting_net=None,
+            agr_type=agr_type,
+            use_attention=True
+        )
         self.inter = nn.Sequential(
             nn.LayerNorm(self.feat_dim),
             nn.Linear(self.feat_dim, self.feat_dim),
@@ -134,7 +217,7 @@ class SimpleActionModel(nn.Module):
             nn.LayerNorm(self.feat_dim),
             nn.Linear(self.feat_dim, 256),
             nn.ReLU(),
-            nn.Dropout(0.3),
+            nn.Dropout(dropout),  # CAMBIO: dropout configurable
             nn.Linear(256, 8)
         )
 
@@ -153,7 +236,7 @@ class SimpleActionModel(nn.Module):
         return action_logits
 
 class MultiTaskModel(nn.Module):
-    def __init__(self, agr_type='mean'):
+    def __init__(self, agr_type='mean', dropout=0.4):
         super(MultiTaskModel, self).__init__()
         self.backbone = video_models.mvit_v2_s(weights=video_models.MViT_V2_S_Weights.KINETICS400_V1)
         for param in self.backbone.parameters():
@@ -161,7 +244,13 @@ class MultiTaskModel(nn.Module):
         in_features = self.backbone.head[1].in_features
         self.backbone.head[1] = nn.Linear(in_features, 512)
         self.feat_dim = 512
-        self.aggregation_model = ViewAvgAggregate(model=self.backbone, lifting_net=nn.Sequential(), agr_type=agr_type)
+        # CAMBIO: lifting_net y atención
+        self.aggregation_model = ViewAvgAggregate(
+            model=self.backbone,
+            lifting_net=None,
+            agr_type=agr_type,
+            use_attention=True
+        )
         self.inter = nn.Sequential(
             nn.LayerNorm(self.feat_dim),
             nn.Linear(self.feat_dim, self.feat_dim),
@@ -173,14 +262,14 @@ class MultiTaskModel(nn.Module):
             nn.LayerNorm(self.feat_dim),
             nn.Linear(self.feat_dim, 256),
             nn.ReLU(),
-            nn.Dropout(0.3),
+            nn.Dropout(dropout),  # CAMBIO: dropout configurable
             nn.Linear(256, 4)
         )
         self.action_branch = nn.Sequential(
             nn.LayerNorm(self.feat_dim),
             nn.Linear(self.feat_dim, 256),
             nn.ReLU(),
-            nn.Dropout(0.3),
+            nn.Dropout(dropout),  # CAMBIO: dropout configurable
             nn.Linear(256, 8)
         )
 
@@ -199,9 +288,8 @@ class MultiTaskModel(nn.Module):
         action_logits = self.action_branch(inter)
         return foul_logits, action_logits
 
-# Updated MultiTaskModelMamba
 class MultiTaskModelMamba(nn.Module):
-    def __init__(self):
+    def __init__(self, dropout=0.5):
         super(MultiTaskModelMamba, self).__init__()
         self.backbone = video_models.mvit_v2_s(weights=video_models.MViT_V2_S_Weights.KINETICS400_V1)
         for param in self.backbone.parameters():
@@ -209,7 +297,12 @@ class MultiTaskModelMamba(nn.Module):
         in_features = self.backbone.head[1].in_features
         self.backbone.head[1] = nn.Linear(in_features, 512)
         self.feat_dim = 512
-        self.aggregation_model = ViewMambaAggregate(model=self.backbone, d_model=self.feat_dim)
+        # CAMBIO: lifting_net y atención
+        self.aggregation_model = ViewMambaAggregate(
+            model=self.backbone,
+            d_model=self.feat_dim,
+            use_attention=True
+        )
         self.inter = nn.Sequential(
             nn.LayerNorm(self.feat_dim),
             nn.Linear(self.feat_dim, self.feat_dim),
@@ -221,14 +314,14 @@ class MultiTaskModelMamba(nn.Module):
             nn.LayerNorm(self.feat_dim),
             nn.Linear(self.feat_dim, 256),
             nn.ReLU(),
-            nn.Dropout(0.5),
+            nn.Dropout(dropout),  # CAMBIO: dropout configurable
             nn.Linear(256, 4)
         )
         self.action_branch = nn.Sequential(
             nn.LayerNorm(self.feat_dim),
             nn.Linear(self.feat_dim, 256),
             nn.ReLU(),
-            nn.Dropout(0.5),
+            nn.Dropout(dropout),  # CAMBIO: dropout configurable
             nn.Linear(256, 8)
         )
 
@@ -246,4 +339,3 @@ class MultiTaskModelMamba(nn.Module):
         foul_logits = self.foul_branch(inter)
         action_logits = self.action_branch(inter)
         return foul_logits, action_logits
-    
