@@ -15,6 +15,23 @@ from torch.utils.data import WeightedRandomSampler
 from torchvision.transforms import RandomErasing
 from torch.cuda.amp import autocast, GradScaler
 
+
+class ClassBalancedFocalLoss(nn.Module):
+    def __init__(self, samples_per_cls, beta=0.9999, gamma=2.0):
+        super().__init__()
+        effective_num = 1.0 - np.power(beta, samples_per_cls)
+        weights = (1.0 - beta) / effective_num
+        weights = weights / np.sum(weights) * len(samples_per_cls)
+        self.weights = torch.tensor(weights).float()
+        self.gamma = gamma
+
+    def forward(self, logits, labels):
+        weights = self.weights.to(logits.device)
+        ce_loss = F.cross_entropy(logits, labels, reduction='none', weight=weights)
+        pt = torch.exp(-ce_loss)
+        focal_loss = ((1 - pt) ** self.gamma) * ce_loss
+        return focal_loss.mean()
+        
 # CAMBIO: Focal Loss (implementación simple)
 class FocalLoss(nn.Module):
     def __init__(self, alpha=1, gamma=2, reduction='mean'):
@@ -576,8 +593,8 @@ def train_model(
                 with autocast():
                     foul_logits, action_logits = model(batch_clips)
                     if use_focal_loss:
-                        foul_loss = FocalLoss()(foul_logits, foul_labels)
-                        action_loss = FocalLoss()(action_logits, action_labels)
+                        foul_loss = ClassBalancedFocalLoss()(foul_logits, foul_labels)
+                        action_loss = ClassBalancedFocalLoss()(action_logits, action_labels)
                     elif use_mixup:
                         foul_loss = mixup_criterion(foul_criterion, foul_logits, foul_labels_a, foul_labels_b, lam)
                         action_loss = mixup_criterion(action_criterion, action_logits, action_labels_a, action_labels_b, lam)
@@ -658,8 +675,8 @@ def train_model(
                 with autocast():
                     foul_logits, action_logits = model(batch_clips)
                     if use_focal_loss:
-                        foul_loss = FocalLoss()(foul_logits, foul_labels)
-                        action_loss = FocalLoss()(action_logits, action_labels)
+                        foul_loss = ClassBalancedFocalLoss()(foul_logits, foul_labels)
+                        action_loss = ClassBalancedFocalLoss()(action_logits, action_labels)
                     else:
                         foul_loss = foul_criterion(foul_logits, foul_labels)
                         action_loss = action_criterion(action_logits, action_labels)
