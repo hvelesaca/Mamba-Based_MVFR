@@ -277,6 +277,61 @@ class MultiTaskModel(nn.Module):
 
     def forward(self, x):
         batch_size, num_views, C, T, H, W = x.shape
+        x = x.reshape(batch_size * num_views * T, C, H, W)
+        x = F.interpolate(x, size=(224, 224), mode='bilinear', align_corners=False)
+        x = x.reshape(batch_size, num_views, C, T, 224, 224)
+        pooled_view, features = self.aggregation_model(x)
+        inter = self.inter(pooled_view)
+        foul_logits = self.foul_branch(inter)
+        action_logits = self.action_branch(inter)
+        return foul_logits, action_logits
+
+
+# =========================
+# Ejemplo de uso en tu modelo principal:
+# =========================
+class MultiTaskModelMamba(nn.Module):
+    def __init__(self, dropout=0.5):
+        super(MultiTaskModelMamba, self).__init__()
+        self.backbone = video_models.mvit_v2_s(weights=video_models.MViT_V2_S_Weights.KINETICS400_V1)
+        for param in self.backbone.parameters():
+            param.requires_grad = False
+        in_features = self.backbone.head[1].in_features
+        self.backbone.head[1] = nn.Linear(in_features, 512)
+        self.feat_dim = 512
+        self.aggregation_model = ViewMambaAggregate(
+            model=self.backbone,
+            d_model=self.feat_dim,
+            use_attention=True
+        )
+        self.inter = nn.Sequential(
+            nn.LayerNorm(self.feat_dim),
+            nn.Linear(self.feat_dim, self.feat_dim),
+            nn.ReLU(),
+            nn.Linear(self.feat_dim, self.feat_dim),
+            nn.ReLU(),
+        )
+        self.foul_branch = nn.Sequential(
+            nn.LayerNorm(self.feat_dim),
+            nn.Linear(self.feat_dim, 256),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(256, 4)
+        )
+        self.action_branch = nn.Sequential(
+            nn.LayerNorm(self.feat_dim),
+            nn.Linear(self.feat_dim, 256),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(256, 8)
+        )
+
+    def unfreeze_backbone(self):
+        for param in self.backbone.parameters():
+            param.requires_grad = True
+
+    def forward(self, x):
+        batch_size, num_views, C, T, H, W = x.shape
         # CAMBIO: Si necesitas resize espacial, hazlo así:
         x = x.view(batch_size * num_views * T, C, H, W)
         x = F.interpolate(x, size=(224, 224), mode='bilinear', align_corners=False)
@@ -287,3 +342,4 @@ class MultiTaskModel(nn.Module):
         foul_logits = self.foul_branch(inter)
         action_logits = self.action_branch(inter)
         return foul_logits, action_logits
+        
