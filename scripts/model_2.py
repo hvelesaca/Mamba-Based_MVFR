@@ -54,37 +54,46 @@ class SimpleAttention(nn.Module):
         return out.mean(dim=1)
 
 # =========================
+# LiftingNet: lifting_net con BatchNorm1d correcto
+# =========================
+class LiftingNet(nn.Module):
+    def __init__(self, d_model):
+        super().__init__()
+        self.linear = nn.Linear(d_model, d_model)
+        self.relu = nn.ReLU()
+        self.bn = nn.BatchNorm1d(d_model)
+    def forward(self, x):
+        # x: [B, V, D]
+        B, V, D = x.shape
+        x = self.linear(x)
+        x = self.relu(x)
+        x = x.view(B * V, D)
+        x = self.bn(x)
+        x = x.view(B, V, D)
+        return x
+        
+# =========================
 # ViewAvgAggregate Mejorado
 # =========================
 class ViewAvgAggregate(nn.Module):
-    def __init__(self, model, lifting_net=None, agr_type='mean', use_attention=True):
+    def __init__(self, model, d_model=512, agr_type='mean', use_attention=True):
         super().__init__()
         self.model = model
-        # CAMBIO: lifting_net real
-        if lifting_net is None:
-            self.lifting_net = nn.Sequential(
-                nn.Linear(512, 512),
-                nn.ReLU(),
-                nn.BatchNorm1d(512)
-            )
-        else:
-            self.lifting_net = lifting_net
+        self.lifting_net = LiftingNet(d_model)
         self.agr_type = agr_type
-        # CAMBIO: atención opcional
         self.use_attention = use_attention
         if use_attention:
-            self.attention = SimpleAttention(512)
+            self.attention = SimpleAttention(d_model)
         else:
             self.attention = None
+        self.bn_pool = nn.BatchNorm1d(d_model)  # CAMBIO: BatchNorm1d instanciado aquí
 
     def forward(self, mvimages):
         B, V, C, T, H, W = mvimages.shape
-        batched = batch_tensor(mvimages, dim=1, squeeze=True)
+        batched = mvimages.view(B * V, C, T, H, W)
         features = self.model(batched)
-        features = unbatch_tensor(features, B, dim=1, unsqueeze=True)
-        # CAMBIO: lifting_net real
+        features = features.view(B, V, -1)
         features = self.lifting_net(features)
-        # CAMBIO: atención
         if self.use_attention and self.attention is not None:
             pooled_view = self.attention(features)
         else:
@@ -94,8 +103,7 @@ class ViewAvgAggregate(nn.Module):
                 pooled_view = torch.max(features, dim=1)[0]
             else:
                 raise ValueError(f"Unknown aggregation type: {self.agr_type}")
-        # CAMBIO: BatchNorm extra después de agregación
-        pooled_view = nn.BatchNorm1d(512).to(pooled_view.device)(pooled_view)
+        pooled_view = self.bn_pool(pooled_view)  # CAMBIO: BatchNorm1d correctamente aplicado
         return pooled_view, features
 
 # =========================
@@ -111,36 +119,28 @@ class ViewMambaAggregate(nn.Module):
             d_conv=d_conv,
             expand=expand
         )
-        # CAMBIO: lifting_net real
-        self.lifting_net = nn.Sequential(
-            nn.Linear(d_model, d_model),
-            nn.ReLU(),
-            nn.BatchNorm1d(d_model)
-        )
-        # CAMBIO: atención opcional
+        self.lifting_net = LiftingNet(d_model)
         self.use_attention = use_attention
         if use_attention:
             self.attention = SimpleAttention(d_model)
         else:
             self.attention = None
+        self.bn_pool = nn.BatchNorm1d(d_model)  # CAMBIO: BatchNorm1d instanciado aquí
 
     def forward(self, mvimages):
         B, V, C, T, H, W = mvimages.shape
-        batched = batch_tensor(mvimages, dim=1, squeeze=True)
+        batched = mvimages.view(B * V, C, T, H, W)
         features = self.model(batched)
-        features = unbatch_tensor(features, B, dim=1, unsqueeze=True)
+        features = features.view(B, V, -1)
         mamba_out = self.mamba(features)
-        # CAMBIO: lifting_net real
         mamba_out = self.lifting_net(mamba_out)
-        # CAMBIO: atención
         if self.use_attention and self.attention is not None:
             pooled_view = self.attention(mamba_out)
         else:
             pooled_view = mamba_out[:, -1, :]
-        # CAMBIO: BatchNorm extra después de agregación
-        pooled_view = nn.BatchNorm1d(mamba_out.shape[-1]).to(pooled_view.device)(pooled_view)
+        pooled_view = self.bn_pool(pooled_view)  # CAMBIO: BatchNorm1d correctamente aplicado
         return pooled_view, mamba_out
-
+        
 # =========================
 # Modelos mejorados
 # =========================
