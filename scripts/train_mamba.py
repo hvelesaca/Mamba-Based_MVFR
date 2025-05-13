@@ -479,7 +479,11 @@ def train_model(
     for epoch in range(num_epochs):
         if epoch == 2:
             print("Unfreezing the backbone...")
-            model.unfreeze_backbone()
+            if hasattr(model, "module"):
+                model.module.unfreeze_backbone()
+            else:
+                model.unfreeze_backbone()
+                
             optimizer = optim.AdamW(model.parameters(), lr=2e-5, weight_decay=0.01)
             if scheduler_type == "cosine":
                 scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs-epoch)
