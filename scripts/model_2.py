@@ -149,23 +149,25 @@ class MultiTaskModelMamba(nn.Module):
     def forward(self, x):
         B, V, C, T, H, W = x.shape
         x = x.view(B * V, C, T, H, W)
-
+    
         # Atención Temporal y Espacial
         x = self.temporal_attn(x)
         x = self.spatial_attn(x)
-
-        x = F.interpolate(x, size=(224, 224), mode='bilinear', align_corners=False)
+    
+        # Corrección aquí: interpolación trilineal para tensores 5D
+        x = F.interpolate(x, size=(T, 224, 224), mode='trilinear', align_corners=False)
+    
         x = x.view(B, V, C, T, 224, 224)
-
+    
         pooled_view, features = self.aggregation_model(x)
         shared_features = self.shared_inter(pooled_view)
-
+    
         foul_features = self.foul_attention(features)
         action_features = self.action_attention(features)
-
+    
         foul_logits = self.foul_branch(shared_features + foul_features)
         action_logits = self.action_branch(shared_features + action_features)
-
+    
         return foul_logits, action_logits
 
 # =========================
