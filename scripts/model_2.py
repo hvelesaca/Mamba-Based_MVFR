@@ -72,9 +72,6 @@ class LiftingNet(nn.Module):
         x = x.view(B, V, D)
         return x
         
-# =========================
-# ViewAvgAggregate Mejorado
-# =========================
 class ViewAvgAggregate(nn.Module):
     def __init__(self, model, d_model=512, agr_type='mean', use_attention=True):
         super().__init__()
@@ -86,13 +83,15 @@ class ViewAvgAggregate(nn.Module):
             self.attention = SimpleAttention(d_model)
         else:
             self.attention = None
-        self.bn_pool = nn.BatchNorm1d(d_model)  # CAMBIO: BatchNorm1d instanciado aquí
+        self.bn_pool = nn.BatchNorm1d(d_model)
 
     def forward(self, mvimages):
+        # mvimages: [B, V, C, T, H, W]
         B, V, C, T, H, W = mvimages.shape
-        batched = mvimages.view(B * V, C, T, H, W)
-        features = self.model(batched)
-        features = features.view(B, V, -1)
+        # CAMBIO: Solo fusiona batch y views, NO el tiempo
+        batched = mvimages.view(B * V, C, T, H, W)  # [B*V, C, T, H, W]
+        features = self.model(batched)               # [B*V, feat_dim]
+        features = features.view(B, V, -1)           # [B, V, feat_dim]
         features = self.lifting_net(features)
         if self.use_attention and self.attention is not None:
             pooled_view = self.attention(features)
@@ -103,12 +102,9 @@ class ViewAvgAggregate(nn.Module):
                 pooled_view = torch.max(features, dim=1)[0]
             else:
                 raise ValueError(f"Unknown aggregation type: {self.agr_type}")
-        pooled_view = self.bn_pool(pooled_view)  # CAMBIO: BatchNorm1d correctamente aplicado
+        pooled_view = self.bn_pool(pooled_view)
         return pooled_view, features
 
-# =========================
-# ViewMambaAggregate Mejorado
-# =========================
 class ViewMambaAggregate(nn.Module):
     def __init__(self, model, d_model=512, d_state=16, d_conv=4, expand=2, use_attention=True):
         super().__init__()
@@ -125,20 +121,22 @@ class ViewMambaAggregate(nn.Module):
             self.attention = SimpleAttention(d_model)
         else:
             self.attention = None
-        self.bn_pool = nn.BatchNorm1d(d_model)  # CAMBIO: BatchNorm1d instanciado aquí
+        self.bn_pool = nn.BatchNorm1d(d_model)
 
     def forward(self, mvimages):
+        # mvimages: [B, V, C, T, H, W]
         B, V, C, T, H, W = mvimages.shape
-        batched = mvimages.view(B * V, C, T, H, W)
-        features = self.model(batched)
-        features = features.view(B, V, -1)
+        # CAMBIO: Solo fusiona batch y views, NO el tiempo
+        batched = mvimages.view(B * V, C, T, H, W)  # [B*V, C, T, H, W]
+        features = self.model(batched)               # [B*V, feat_dim]
+        features = features.view(B, V, -1)           # [B, V, feat_dim]
         mamba_out = self.mamba(features)
         mamba_out = self.lifting_net(mamba_out)
         if self.use_attention and self.attention is not None:
             pooled_view = self.attention(mamba_out)
         else:
             pooled_view = mamba_out[:, -1, :]
-        pooled_view = self.bn_pool(pooled_view)  # CAMBIO: BatchNorm1d correctamente aplicado
+        pooled_view = self.bn_pool(pooled_view)
         return pooled_view, mamba_out
         
 # =========================
@@ -279,65 +277,13 @@ class MultiTaskModel(nn.Module):
 
     def forward(self, x):
         batch_size, num_views, C, T, H, W = x.shape
-        x = x.reshape(batch_size * num_views * T, C, H, W)
+        # CAMBIO: Si necesitas resize espacial, hazlo así:
+        x = x.view(batch_size * num_views * T, C, H, W)
         x = F.interpolate(x, size=(224, 224), mode='bilinear', align_corners=False)
-        x = x.reshape(batch_size, num_views, C, T, 224, 224)
+        x = x.view(batch_size, num_views, C, T, 224, 224)
+        # NO modifiques la dimensión temporal, solo batch y views
         pooled_view, features = self.aggregation_model(x)
         inter = self.inter(pooled_view)
         foul_logits = self.foul_branch(inter)
         action_logits = self.action_branch(inter)
         return foul_logits, action_logits
-
-
-# =========================
-# Ejemplo de uso en tu modelo principal:
-# =========================
-class MultiTaskModelMamba(nn.Module):
-    def __init__(self, dropout=0.5):
-        super(MultiTaskModelMamba, self).__init__()
-        self.backbone = video_models.mvit_v2_s(weights=video_models.MViT_V2_S_Weights.KINETICS400_V1)
-        for param in self.backbone.parameters():
-            param.requires_grad = False
-        in_features = self.backbone.head[1].in_features
-        self.backbone.head[1] = nn.Linear(in_features, 512)
-        self.feat_dim = 512
-        self.aggregation_model = ViewMambaAggregate(
-            model=self.backbone,
-            d_model=self.feat_dim,
-            use_attention=True
-        )
-        self.inter = nn.Sequential(
-            nn.LayerNorm(self.feat_dim),
-            nn.Linear(self.feat_dim, self.feat_dim),
-            nn.ReLU(),
-            nn.Linear(self.feat_dim, self.feat_dim),
-            nn.ReLU(),
-        )
-        self.foul_branch = nn.Sequential(
-            nn.LayerNorm(self.feat_dim),
-            nn.Linear(self.feat_dim, 256),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(256, 4)
-        )
-        self.action_branch = nn.Sequential(
-            nn.LayerNorm(self.feat_dim),
-            nn.Linear(self.feat_dim, 256),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(256, 8)
-        )
-
-    def unfreeze_backbone(self):
-        for param in self.backbone.parameters():
-            param.requires_grad = True
-
-    def forward(self, x):
-        batch_size, num_views, C, T, H, W = x.shape
-        x = x.reshape(batch_size, num_views, C, T, H, W)
-        pooled_view, features = self.aggregation_model(x)
-        inter = self.inter(pooled_view)
-        foul_logits = self.foul_branch(inter)
-        action_logits = self.action_branch(inter)
-        return foul_logits, action_logits
-        
