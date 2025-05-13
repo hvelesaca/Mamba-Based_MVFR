@@ -166,7 +166,7 @@ class MVFoulDataset(Dataset):
             for i in range(len(self.action_folders)):
                 action_factor = 1 if self.action_labels[i] not in [5, 6, 7] else (3 if self.action_labels[i] == 5 else 2)
                 foul_factor = 5 if self.foul_labels[i] in [0, 3] else (2 if self.foul_labels[i] == 2 else 1)
-                factor = min(max(action_factor, foul_factor), 20)
+                factor = min(max(action_factor, foul_factor), 25)
                 indices.extend([i] * factor)
             self.indices = indices
             print(f"Number of samples after oversampling: {len(self.indices)}")
@@ -218,6 +218,62 @@ def custom_collate(batch):
     return clips, foul_labels, action_labels, action_ids
 
 def compute_class_weights(json_paths, foul_map, action_map):
+    metadata = {}
+    for json_path in json_paths if isinstance(json_paths, list) else [json_paths]:
+        with open(json_path, 'r') as f:
+            data = json.load(f)
+            metadata.update(data["Actions"])
+    action_normalization = {
+        "standing tackle": "Standing Tackling", "tackle": "Tackling", "high leg": "High Leg",
+        "dont know": None, "": None, "challenge": "Challenge", "dive": "Dive",
+        "elbowing": "Elbowing", "holding": "Holding", "pushing": "Pushing", "high Leg": "High Leg"
+    }
+    foul_labels = []
+    action_labels = []
+    for action_id, video in metadata.items():
+        offence = video["Offence"].lower()
+        severity_str = video["Severity"]
+        action_class = video["Action class"].lower()
+        normalized_action = action_normalization.get(action_class, action_class.title())
+        if normalized_action is None or normalized_action not in action_map:
+            continue
+        if (offence == '' or offence == 'between') and normalized_action != 'Dive':
+            continue
+        if (severity_str == '' or severity_str == '2.0' or severity_str == '4.0') and \
+           normalized_action != 'Dive' and offence != 'no offence':
+            continue
+        if offence == '' or offence == 'between':
+            offence = 'offence'
+        if severity_str == '' or severity_str == '2.0' or severity_str == '4.0':
+            severity_str = '1.0'
+        if offence == 'no offence':
+            foul_label = 0
+        elif offence == 'offence':
+            severity = float(severity_str)
+            if severity == 1.0:
+                foul_label = 1
+            elif severity == 3.0:
+                foul_label = 2
+            elif severity == 5.0:
+                foul_label = 3
+            else:
+                continue
+        else:
+            continue
+        action_label = action_map[normalized_action]
+        foul_labels.append(foul_label)
+        action_labels.append(action_label)
+    foul_counts = torch.bincount(torch.tensor(foul_labels), minlength=len(foul_map))
+    action_counts = torch.bincount(torch.tensor(action_labels), minlength=len(action_map))
+    # Cambia la fórmula aquí:
+    foul_weights = foul_counts.sum() / (foul_counts.float() + 1e-6)
+    action_weights = action_counts.sum() / (action_counts.float() + 1e-6)
+    # Normaliza si quieres
+    foul_weights = foul_weights / foul_weights.sum()
+    action_weights = action_weights / action_weights.sum()
+    return foul_weights, action_weights, foul_counts, action_counts
+    
+def compute_class_weightsAnt(json_paths, foul_map, action_map):
     metadata = {}
     for json_path in json_paths if isinstance(json_paths, list) else [json_paths]:
         with open(json_path, 'r') as f:
@@ -738,8 +794,8 @@ if __name__ == "__main__":
     print("\nTraining MultiTaskMamba Model...")
     multitask_model = MultiTaskModelMamba()
     # CAMBIO: Aumentar label smoothing a 0.1
-    foul_criterion = nn.CrossEntropyLoss(weight=foul_weights.to(device), label_smoothing=0.1)
-    action_criterion = nn.CrossEntropyLoss(weight=action_weights.to(device), label_smoothing=0.1)
+    foul_criterion = nn.CrossEntropyLoss(weight=foul_weights.to(device), label_smoothing=0.01)
+    action_criterion = nn.CrossEntropyLoss(weight=action_weights.to(device), label_smoothing=0.01)
     # CAMBIO: Puedes activar focal loss, mixup, cutmix, augment extra y scheduler cosine aquí:
 
     print("Foul weights:", foul_weights)
