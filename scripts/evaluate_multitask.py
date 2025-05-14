@@ -508,7 +508,7 @@ if __name__ == "__main__":
         model = torch.nn.DataParallel(model)
     model = model.to(device)
 
-    model.load_state_dict(torch.load("/kaggle/working/Mamba-Based_MVFR/models/best_multitask_mamba_model_epoch6_ba31.8905.pth", map_location=device), strict=False)
+    model.load_state_dict(torch.load("/kaggle/working/Mamba-Based_MVFR/models/best_multitask_mamba_model_epoch5_ba29.6007.pth", map_location=device), strict=False)
 
     print(f"\nEvaluating Trained MultiTask Model on {args.dataset_type.capitalize()} Test Set...")
     evaluate_multitask_model(model, test_loader, args.dataset_type, device)
