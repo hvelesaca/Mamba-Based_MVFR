@@ -58,7 +58,41 @@ class ViewMambaAggregate(nn.Module):
         return pooled_view, mamba_out
 
 # =========================
-# Modelo Multi-tarea Mejorado
+# Temporal Attention Module
+# =========================
+class TemporalAttention(nn.Module):
+    def __init__(self, channels, frames=16):
+        super().__init__()
+        self.attention = nn.Sequential(
+            nn.AdaptiveAvgPool3d((frames, 1, 1)),
+            nn.Conv3d(channels, 1, kernel_size=1),
+            nn.Flatten(),
+            nn.Softmax(dim=-1)
+        )
+
+    def forward(self, x):
+        attn_weights = self.attention(x).unsqueeze(1).unsqueeze(-1).unsqueeze(-1)
+        return x * attn_weights
+
+# =========================
+# Spatial Attention Module
+# =========================
+class SpatialAttention(nn.Module):
+    def __init__(self, kernel_size=7):
+        super().__init__()
+        padding = (kernel_size - 1) // 2
+        self.conv = nn.Conv3d(2, 1, kernel_size=(1, kernel_size, kernel_size), padding=(0, padding, padding))
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        avg_out = torch.mean(x, dim=1, keepdim=True)
+        max_out, _ = torch.max(x, dim=1, keepdim=True)
+        x_cat = torch.cat([avg_out, max_out], dim=1)
+        attn = self.sigmoid(self.conv(x_cat))
+        return x * attn
+
+# =========================
+# Modelo Multi-tarea con Atención Espacio-Temporal
 # =========================
 class MultiTaskModelMamba(nn.Module):
     def __init__(self, dropout=0.5, drop_path_rate=0.1):
@@ -69,6 +103,9 @@ class MultiTaskModelMamba(nn.Module):
         in_features = self.backbone.head[1].in_features
         self.backbone.head[1] = nn.Linear(in_features, 512)
         self.feat_dim = 512
+
+        self.temporal_attn = TemporalAttention(channels=3, frames=16)
+        self.spatial_attn = SpatialAttention()
 
         self.aggregation_model = ViewMambaAggregate(
             model=self.backbone,
@@ -110,20 +147,27 @@ class MultiTaskModelMamba(nn.Module):
                 param.requires_grad = True
 
     def forward(self, x):
-        batch_size, num_views, C, T, H, W = x.shape
-        x = x.view(batch_size * num_views * T, C, H, W)
-        x = F.interpolate(x, size=(224, 224), mode='bilinear', align_corners=False)
-        x = x.view(batch_size, num_views, C, T, 224, 224)
-
+        B, V, C, T, H, W = x.shape
+        x = x.view(B * V, C, T, H, W)
+    
+        # Atención Temporal y Espacial
+        x = self.temporal_attn(x)
+        x = self.spatial_attn(x)
+    
+        # Corrección aquí: interpolación trilineal para tensores 5D
+        x = F.interpolate(x, size=(T, 224, 224), mode='trilinear', align_corners=False)
+    
+        x = x.view(B, V, C, T, 224, 224)
+    
         pooled_view, features = self.aggregation_model(x)
         shared_features = self.shared_inter(pooled_view)
-
+    
         foul_features = self.foul_attention(features)
         action_features = self.action_attention(features)
-
+    
         foul_logits = self.foul_branch(shared_features + foul_features)
         action_logits = self.action_branch(shared_features + action_features)
-
+    
         return foul_logits, action_logits
 
 # =========================
@@ -139,8 +183,7 @@ if __name__ == "__main__":
     criterion_foul = nn.CrossEntropyLoss()
     criterion_action = nn.CrossEntropyLoss()
 
-    # Ejemplo de datos sintéticos (reemplaza con tu DataLoader real)
-    dummy_input = torch.randn(2, 3, 3, 16, 224, 224).to(device)  # [B, V, C, T, H, W]
+    dummy_input = torch.randn(2, 3, 3, 16, 224, 224).to(device)
     dummy_foul_labels = torch.randint(0, 4, (2,)).to(device)
     dummy_action_labels = torch.randint(0, 8, (2,)).to(device)
 
