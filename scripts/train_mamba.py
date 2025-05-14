@@ -569,7 +569,7 @@ def train_model(
             scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=5, T_mult=2)
         """    
         
-        if epoch == 10:
+        if epoch == 25:
             print("Unfreezing the backbone...")
             if hasattr(model, "module"):
                 model.module.unfreeze_partial_backbone()
