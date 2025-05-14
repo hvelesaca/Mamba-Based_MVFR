@@ -402,6 +402,26 @@ def evaluate_multitask_model(model, test_loader, dataset_type, device="cuda"):
         print(f"✅ Action confusion matrix saved to '{action_cm_path}'")
         plt.show()
         plt.close()
+
+        
+        foul_gt_json = generate_groundtruth_json(test_loader.dataset, "Foul")
+        action_gt_json = generate_groundtruth_json(test_loader.dataset, "Action")
+        
+        foul_results = custom_evaluate(output_json, foul_gt_json, "Foul")
+        print("\nTest Foul Metrics:")
+        print(f"Accuracy: {foul_results['accuracy_offence_severity']:.4f}%, "
+              f"Balanced Accuracy: {foul_results['balanced_accuracy_offence_severity']:.4f}%")
+        print(f"Per-Class Accuracy: {foul_results['per_class_offence']}")
+        print(f"True Distribution: {foul_results['true_distribution']}")
+        print(f"Pred Distribution: {foul_results['pred_distribution']}")
+        
+        action_results = custom_evaluate(output_json, action_gt_json, "Action")
+        print("\nTest Action Metrics:")
+        print(f"Accuracy: {action_results['accuracy_action']:.4f}%, "
+              f"Balanced Accuracy: {action_results['balanced_accuracy_action']:.4f}%")
+        print(f"Per-Class Accuracy: {action_results['per_class_action']}")
+        print(f"True Distribution: {action_results['true_distribution']}")
+        print(f"Pred Distribution: {action_results['pred_distribution']}")
         
 def evaluate_multitask_model2(model, test_loader, dataset_type, device="cuda" if torch.cuda.is_available() else "cpu"):
     model.eval()
