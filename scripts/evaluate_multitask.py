@@ -9,6 +9,10 @@ import numpy as np
 import datetime
 import argparse
 
+from sklearn.metrics import precision_recall_fscore_support, confusion_matrix, top_k_accuracy_score
+import seaborn as sns
+import matplotlib.pyplot as plt
+
 # Set random seed for reproducibility
 torch.manual_seed(42)
 
@@ -301,7 +305,90 @@ def custom_evaluate(predictions, groundtruth, task_name):
             "pred_distribution": pred_counts.tolist()
         }
 
-def evaluate_multitask_model(model, test_loader, dataset_type, device="cuda" if torch.cuda.is_available() else "cpu"):
+def evaluate_multitask_model(model, test_loader, dataset_type, device="cuda"):
+    model.eval()
+
+    all_foul_preds, all_action_preds = [], []
+    all_foul_labels, all_action_labels = [], []
+    all_foul_logits, all_action_logits = [], []
+    test_predictions = {}
+
+    with torch.no_grad():
+        for batch_clips, foul_labels, action_labels, action_ids in tqdm(test_loader, desc=f"Evaluating {dataset_type.capitalize()} Set"):
+            batch_clips = batch_clips.to(device, non_blocking=True)
+
+            foul_logits, action_logits = model(batch_clips)
+
+            all_foul_logits.append(foul_logits.cpu())
+            all_action_logits.append(action_logits.cpu())
+
+            foul_preds = torch.argmax(foul_logits, dim=1)
+            action_preds = torch.argmax(action_logits, dim=1)
+
+            all_foul_preds.extend(foul_preds.cpu().tolist())
+            all_action_preds.extend(action_preds.cpu().tolist())
+            all_foul_labels.extend(foul_labels.cpu().tolist())
+            all_action_labels.extend(action_labels.cpu().tolist())
+
+            batch_predictions = generate_predictions_json(action_ids, foul_logits, action_logits)
+            test_predictions.update(batch_predictions["Actions"])
+
+    # Concatenar logits para métricas adicionales
+    all_foul_logits = torch.cat(all_foul_logits)
+    all_action_logits = torch.cat(all_action_logits)
+
+    # Guardar predicciones
+    output_json = {
+        "Set": "test",
+        "Actions": {k: test_predictions[k] for k in sorted(test_predictions.keys(), key=int)}
+    }
+    os.makedirs("results", exist_ok=True)
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    prediction_file = f"results/predictions_multitask_{dataset_type}_{timestamp}.json"
+    with open(prediction_file, "w") as f:
+        json.dump(output_json, f, indent=4)
+    print(f"\nPredictions saved to '{prediction_file}'")
+
+    if dataset_type == "filtered":
+        # Métricas adicionales
+        foul_top2_acc = top_k_accuracy_score(all_foul_labels, all_foul_logits, k=2) * 100
+        action_top2_acc = top_k_accuracy_score(all_action_labels, all_action_logits, k=2) * 100
+
+        foul_precision, foul_recall, foul_f1, _ = precision_recall_fscore_support(all_foul_labels, all_foul_preds, average='weighted', zero_division=0)
+        action_precision, action_recall, action_f1, _ = precision_recall_fscore_support(all_action_labels, all_action_preds, average='weighted', zero_division=0)
+
+        foul_cm = confusion_matrix(all_foul_labels, all_foul_preds)
+        action_cm = confusion_matrix(all_action_labels, all_action_preds)
+
+        # Mostrar resultados
+        print("\n📌 Foul Metrics:")
+        print(f"Top-1 Accuracy: {np.mean(np.array(all_foul_preds) == np.array(all_foul_labels)) * 100:.2f}%")
+        print(f"Top-2 Accuracy: {foul_top2_acc:.2f}%")
+        print(f"Precision: {foul_precision:.2f}, Recall: {foul_recall:.2f}, F1-score: {foul_f1:.2f}")
+        print("Confusion Matrix (Foul):\n", foul_cm)
+
+        print("\n📌 Action Metrics:")
+        print(f"Top-1 Accuracy: {np.mean(np.array(all_action_preds) == np.array(all_action_labels)) * 100:.2f}%")
+        print(f"Top-2 Accuracy: {action_top2_acc:.2f}%")
+        print(f"Precision: {action_precision:.2f}, Recall: {action_recall:.2f}, F1-score: {action_f1:.2f}")
+        print("Confusion Matrix (Action):\n", action_cm)
+
+        # Opcional: Visualizar matrices de confusión
+        plt.figure(figsize=(8, 6))
+        sns.heatmap(foul_cm, annot=True, fmt='d', cmap='Blues', xticklabels=list(MVFoulDataset.foul_map.keys()), yticklabels=list(MVFoulDataset.foul_map.keys()))
+        plt.title("Foul Confusion Matrix")
+        plt.xlabel("Predicted")
+        plt.ylabel("True")
+        plt.show()
+
+        plt.figure(figsize=(10, 8))
+        sns.heatmap(action_cm, annot=True, fmt='d', cmap='Greens', xticklabels=list(MVFoulDataset.action_map.keys()), yticklabels=list(MVFoulDataset.action_map.keys()))
+        plt.title("Action Confusion Matrix")
+        plt.xlabel("Predicted")
+        plt.ylabel("True")
+        plt.show()
+        
+def evaluate_multitask_model2(model, test_loader, dataset_type, device="cuda" if torch.cuda.is_available() else "cpu"):
     model.eval()
     
     all_foul_preds, all_action_preds, all_foul_labels, all_action_labels = [], [], [], []
