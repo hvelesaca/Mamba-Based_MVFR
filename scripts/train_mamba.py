@@ -234,81 +234,8 @@ def custom_collate(batch):
     action_labels = torch.tensor([item[2].item() for item in batch], dtype=torch.long)
     action_ids = [item[3] for item in batch]
     return clips, foul_labels, action_labels, action_ids
-
-def compute_class_weights(json_paths, foul_map, action_map, normalize=True):
-    metadata = {}
-    if not isinstance(json_paths, list):
-        json_paths = [json_paths]
-
-    for json_path in json_paths:
-        with open(json_path, 'r') as f:
-            data = json.load(f)
-            metadata.update(data["Actions"])
-
-    action_normalization = {
-        "standing tackle": "Standing Tackling", "tackle": "Tackling", "high leg": "High Leg",
-        "dont know": None, "": None, "challenge": "Challenge", "dive": "Dive",
-        "elbowing": "Elbowing", "holding": "Holding", "pushing": "Pushing", "high Leg": "High Leg"
-    }
-
-    foul_labels, action_labels = [], []
-
-    for action_id, video in metadata.items():
-        offence = video["Offence"].lower()
-        severity_str = video["Severity"]
-        action_class = video["Action class"].lower()
-
-        normalized_action = action_normalization.get(action_class, action_class.title())
-        if normalized_action is None or normalized_action not in action_map:
-            continue
-
-        if (offence == '' or offence == 'between') and normalized_action != 'Dive':
-            continue
-        if (severity_str == '' or severity_str in ['2.0', '4.0']) and normalized_action != 'Dive' and offence != 'no offence':
-            continue
-
-        if offence in ['', 'between']:
-            offence = 'offence'
-        if severity_str in ['', '2.0', '4.0']:
-            severity_str = '1.0'
-
-        if offence == 'no offence':
-            foul_label = foul_map['No offence']
-        elif offence == 'offence':
-            severity = float(severity_str)
-            if severity == 1.0:
-                foul_label = foul_map['Offence Severity 1']
-            elif severity == 3.0:
-                foul_label = foul_map['Offence Severity 3']
-            elif severity == 5.0:
-                foul_label = foul_map['Offence Severity 5']
-            else:
-                continue
-        else:
-            continue
-
-        action_label = action_map[normalized_action]
-
-        foul_labels.append(foul_label)
-        action_labels.append(action_label)
-
-    foul_counts = torch.bincount(torch.tensor(foul_labels), minlength=len(foul_map))
-    action_counts = torch.bincount(torch.tensor(action_labels), minlength=len(action_map))
-
-    total_foul_samples = foul_counts.sum().float()
-    total_action_samples = action_counts.sum().float()
-
-    # Fórmula estándar para pesos de clase
-    foul_weights = total_foul_samples / (len(foul_map) * foul_counts.float().clamp(min=1))
-    action_weights = total_action_samples / (len(action_map) * action_counts.float().clamp(min=1))
-
-    if normalize:
-        foul_weights = foul_weights / foul_weights.sum()
-        action_weights = action_weights / action_weights.sum()
-
-    return foul_weights, action_weights, foul_counts, action_counts
     
-def compute_class_weightsAnt1(json_paths, foul_map, action_map):
+def compute_class_weights(json_paths, foul_map, action_map):
     metadata = {}
     for json_path in json_paths if isinstance(json_paths, list) else [json_paths]:
         with open(json_path, 'r') as f:
