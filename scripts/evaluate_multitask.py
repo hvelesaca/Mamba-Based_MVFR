@@ -3,7 +3,7 @@ import json
 import torch
 from torch.utils.data import Dataset, DataLoader
 import torch.nn as nn
-from model_2 import MultiTaskModel
+from model_2 import MultiTaskModelMamba
 from tqdm import tqdm
 import numpy as np
 import datetime
