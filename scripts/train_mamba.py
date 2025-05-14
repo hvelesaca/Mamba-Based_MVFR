@@ -554,30 +554,21 @@ def train_model(
         json.dump(val_gt_foul_json, f)
     with open("val_gt_action.json", "w") as f:
         json.dump(val_gt_action_json, f)
-
-    for epoch in range(num_epochs):
-        """
-        if epoch == 4:
-            print("Gradually unfreezing backbone...")
-            gradual_unfreeze(model, current_epoch=epoch, total_unfreeze_epochs=5)
         
-            optimizer = optim.AdamW([
-                {'params': model.backbone.parameters(), 'lr': 1e-5},
-                {'params': model.head.parameters(), 'lr': 5e-5}
-            ], weight_decay=0.01)
-        
-            scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=5, T_mult=2)
-        """    
-        
-        if epoch == 25:
+    for epoch in range(num_epochs):       
+        if epoch == 5:
             print("Unfreezing the backbone...")
             if hasattr(model, "module"):
                 model.module.unfreeze_partial_backbone()
             else:
                 model.unfreeze_partial_backbone()
+
+            # Al descongelar, reduce la tasa de aprendizaje para evitar cambios bruscos
+            optimizer = optim.AdamW(model.parameters(), lr=2e-5, weight_decay=1e-2)
                 
-            optimizer = optim.AdamW(model.parameters(), lr=2e-5, weight_decay=0.01)
-            if scheduler_type == "cosine":
+            if scheduler_type == "stepLR":
+                scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=3, gamma=0.1)
+            elif scheduler_type == "cosine":
                 scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs-epoch)
             else:
                 scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=5e-5, total_steps=(num_epochs - epoch) * len(train_loader), pct_start=0.1)
@@ -655,7 +646,7 @@ def train_model(
                         "confidence_action": float(a_probs[a_pred])
                     }
 
-                pbar.set_postfix({'foulLoss': train_foul_loss / (pbar.n + 1), 'actionLoss': train_action_loss / (pbar.n + 1)})
+                pbar.set_postfix({'FLoss': train_foul_loss / (pbar.n + 1), 'ALoss': train_action_loss / (pbar.n + 1)})
 
                 del batch_clips, foul_logits, action_logits, loss
                 torch.cuda.empty_cache()
