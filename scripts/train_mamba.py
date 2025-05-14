@@ -528,8 +528,8 @@ def train_model(
 
     augment = get_augmentations(device, use_extra_aug=use_extra_aug) if "train" in train_loader.dataset.split else nn.Identity()
 
-    #optimizer = optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-2)
-    optimizer = optim.AdamW(model.parameters(), lr=1e-4, betas=(0.9, 0.999), eps=1e-07, weight_decay=1e-2, amsgrad=False)
+    optimizer = optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-2)
+    #optimizer = optim.AdamW(model.parameters(), lr=1e-4, betas=(0.9, 0.999), eps=1e-07, weight_decay=1e-2, amsgrad=False)
 
     if scheduler_type == "stepLR":    
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
@@ -557,7 +557,7 @@ def train_model(
         json.dump(val_gt_action_json, f)
         
     for epoch in range(num_epochs):       
-        if epoch == 3:
+        if epoch == 7:
             print("Unfreezing the backbone...")
             if hasattr(model, "module"):
                 model.module.unfreeze_partial_backbone()
@@ -850,5 +850,5 @@ if __name__ == "__main__":
         use_mixup=False,       # CAMBIO: pon True para usar mixup
         use_cutmix=False,      # CAMBIO: pon True para usar cutmix (no implementado aquí)
         use_extra_aug=True,    # CAMBIO: pon False para solo augmentaciones básicas
-        scheduler_type="cosine"  # CAMBIO: pon "cosine, onecycle" para CosineAnnealingLR
+        scheduler_type="stepLR"  # CAMBIO: pon "cosine, onecycle, stepLR" para CosineAnnealingLR
     )
