@@ -11,6 +11,8 @@ import argparse
 
 # Set random seed for reproducibility
 torch.manual_seed(42)
+
+
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(42)
     torch.backends.cudnn.deterministic = True
@@ -18,8 +20,7 @@ if torch.cuda.is_available():
 
 class MVFoulDataset(Dataset):
     foul_map = {"No Offence": 0, "Offence Severity 1": 1, "Offence Severity 3": 2, "Offence Severity 5": 3}
-    action_map = {
-        "Standing Tackling": 0, "Tackling": 1, "Holding": 2, "Pushing": 3,
+    action_map = {"Standing Tackling": 0, "Tackling": 1, "Holding": 2, "Pushing": 3,
         "Challenge": 4, "Dive": 5, "High Leg": 6, "Elbowing": 7
     }
 
