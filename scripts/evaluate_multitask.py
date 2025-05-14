@@ -374,7 +374,7 @@ if __name__ == "__main__":
     filter_data = (args.dataset_type == 'filtered')
     test_dataset = MVFoulDataset("/kaggle/input/datasetmvfd/datasetMVFD/test_preprocessed", "/kaggle/input/datasetmvfd/datasetMVFD/test_preprocessed/annotations.json", 
                                  split='test', preload=True, filter_data=filter_data)
-    test_loader = DataLoader(test_dataset, batch_size=24, shuffle=False, collate_fn=custom_collate, 
+    test_loader = DataLoader(test_dataset, batch_size=8, shuffle=False, collate_fn=custom_collate, 
                              num_workers=0, pin_memory=True)
     
     # Load the trained MultiTaskModel
