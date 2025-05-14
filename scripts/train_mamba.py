@@ -184,7 +184,7 @@ class MVFoulDataset(Dataset):
             for i in range(len(self.action_folders)):
                 action_factor = 1 if self.action_labels[i] not in [5, 6, 7] else (3 if self.action_labels[i] == 5 else 2)
                 foul_factor = 5 if self.foul_labels[i] in [0, 3] else (2 if self.foul_labels[i] == 2 else 1)
-                factor = min(max(action_factor, foul_factor), 25)
+                factor = min(max(action_factor, foul_factor), 30)
                 indices.extend([i] * factor)
             self.indices = indices
             print(f"Number of samples after oversampling: {len(self.indices)}")
@@ -552,7 +552,8 @@ def train_model(
         json.dump(val_gt_action_json, f)
 
     for epoch in range(num_epochs):
-        if patience_counter >= 5:
+        """
+        if epoch == 4:
             print("Gradually unfreezing backbone...")
             gradual_unfreeze(model, current_epoch=epoch, total_unfreeze_epochs=5)
         
@@ -562,9 +563,9 @@ def train_model(
             ], weight_decay=0.01)
         
             scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=5, T_mult=2)
-            
-        """
-        if epoch == 2:
+        """    
+        
+        if epoch == 4:
             print("Unfreezing the backbone...")
             if hasattr(model, "module"):
                 model.module.unfreeze_partial_backbone()
@@ -576,7 +577,6 @@ def train_model(
                 scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs-epoch)
             else:
                 scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=5e-5, total_steps=(num_epochs - epoch) * len(train_loader), pct_start=0.1)
-        """
         
         model.train()
         train_foul_loss = 0.0
