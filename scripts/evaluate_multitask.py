@@ -378,7 +378,7 @@ if __name__ == "__main__":
                              num_workers=0, pin_memory=True)
     
     # Load the trained MultiTaskModel
-    multitask_model = MultiTaskModelMamba(agr_type='max').to(device)
+    multitask_model = MultiTaskModelMamba().to(device)
     multitask_model.load_state_dict(torch.load("/kaggle/working/Mamba-Based_MVFR/models/best_multitask_mamba_model_epoch2_ba29.9148.pth", map_location=device))
     
     print(f"\nEvaluating Trained MultiTask Model on {args.dataset_type.capitalize()} Test Set...")
