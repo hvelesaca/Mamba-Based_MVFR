@@ -372,21 +372,37 @@ def evaluate_multitask_model(model, test_loader, dataset_type, device="cuda"):
         print(f"Top-2 Accuracy: {action_top2_acc:.2f}%")
         print(f"Precision: {action_precision:.2f}, Recall: {action_recall:.2f}, F1-score: {action_f1:.2f}")
         print("Confusion Matrix (Action):\n", action_cm)
-
-        # Opcional: Visualizar matrices de confusión
+        
+        # Crear carpeta para guardar resultados si no existe
+        os.makedirs("results/confusion_matrices", exist_ok=True)
+        
+        # Matriz de confusión para Foul
         plt.figure(figsize=(8, 6))
-        sns.heatmap(foul_cm, annot=True, fmt='d', cmap='Blues', xticklabels=list(MVFoulDataset.foul_map.keys()), yticklabels=list(MVFoulDataset.foul_map.keys()))
+        sns.heatmap(foul_cm, annot=True, fmt='d', cmap='Blues',
+                    xticklabels=list(MVFoulDataset.foul_map.keys()),
+                    yticklabels=list(MVFoulDataset.foul_map.keys()))
         plt.title("Foul Confusion Matrix")
         plt.xlabel("Predicted")
         plt.ylabel("True")
+        foul_cm_path = f"results/confusion_matrices/foul_confusion_matrix_{timestamp}.png"
+        plt.savefig(foul_cm_path, bbox_inches='tight')
+        print(f"✅ Foul confusion matrix saved to '{foul_cm_path}'")
         plt.show()
-
+        plt.close()
+        
+        # Matriz de confusión para Action
         plt.figure(figsize=(10, 8))
-        sns.heatmap(action_cm, annot=True, fmt='d', cmap='Greens', xticklabels=list(MVFoulDataset.action_map.keys()), yticklabels=list(MVFoulDataset.action_map.keys()))
+        sns.heatmap(action_cm, annot=True, fmt='d', cmap='Greens',
+                    xticklabels=list(MVFoulDataset.action_map.keys()),
+                    yticklabels=list(MVFoulDataset.action_map.keys()))
         plt.title("Action Confusion Matrix")
         plt.xlabel("Predicted")
         plt.ylabel("True")
+        action_cm_path = f"results/confusion_matrices/action_confusion_matrix_{timestamp}.png"
+        plt.savefig(action_cm_path, bbox_inches='tight')
+        print(f"✅ Action confusion matrix saved to '{action_cm_path}'")
         plt.show()
+        plt.close()
         
 def evaluate_multitask_model2(model, test_loader, dataset_type, device="cuda" if torch.cuda.is_available() else "cpu"):
     model.eval()
