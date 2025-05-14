@@ -340,7 +340,7 @@ def evaluate_models(foul_model, action_model, test_loader, device="cuda" if torc
 if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
     
-    test_dataset = MVFoulDataset("dataset/test_preprocessed", "dataset/test/annotations.json", 
+    test_dataset = MVFoulDataset("/kaggle/input/datasetmvfd/datasetMVFD/test_preprocessed", "/kaggle/input/datasetmvfd/datasetMVFD/test_preprocessed/annotations.json", 
                                  split='test', preload=True)
     test_loader = DataLoader(test_dataset, batch_size=24, shuffle=False, collate_fn=custom_collate, 
                              num_workers=0, pin_memory=True)
