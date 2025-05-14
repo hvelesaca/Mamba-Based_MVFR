@@ -537,7 +537,7 @@ def train_model(
     else:
         scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=1e-4, total_steps=num_epochs * len(train_loader), pct_start=0.1)
     
-        scaler = GradScaler()
+    scaler = GradScaler()
 
     os.makedirs("models", exist_ok=True)
     best_val_ba = 0.0
