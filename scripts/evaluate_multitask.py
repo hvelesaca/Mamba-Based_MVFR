@@ -361,15 +361,15 @@ def evaluate_multitask_model(model, test_loader, dataset_type, device="cuda"):
 
         # Mostrar resultados
         print("\n📌 Foul Metrics:")
-        print(f"Top-1 Accuracy: {np.mean(np.array(all_foul_preds) == np.array(all_foul_labels)) * 100:.2f}%")
-        print(f"Top-2 Accuracy: {foul_top2_acc:.2f}%")
-        print(f"Precision: {foul_precision:.2f}, Recall: {foul_recall:.2f}, F1-score: {foul_f1:.2f}")
+        print(f"Top-1 Accuracy: {np.mean(np.array(all_foul_preds) == np.array(all_foul_labels)) * 100:.4f}%")
+        print(f"Top-2 Accuracy: {foul_top2_acc:.4f}%")
+        print(f"Precision: {foul_precision:.4f}, Recall: {foul_recall:.4f}, F1-score: {foul_f1:.4f}")
         print("Confusion Matrix (Foul):\n", foul_cm)
 
         print("\n📌 Action Metrics:")
-        print(f"Top-1 Accuracy: {np.mean(np.array(all_action_preds) == np.array(all_action_labels)) * 100:.2f}%")
-        print(f"Top-2 Accuracy: {action_top2_acc:.2f}%")
-        print(f"Precision: {action_precision:.2f}, Recall: {action_recall:.2f}, F1-score: {action_f1:.2f}")
+        print(f"Top-1 Accuracy: {np.mean(np.array(all_action_preds) == np.array(all_action_labels)) * 100:.4f}%")
+        print(f"Top-2 Accuracy: {action_top2_acc:.4f}%")
+        print(f"Precision: {action_precision:.4f}, Recall: {action_recall:.4f}, F1-score: {action_f1:.4f}")
         print("Confusion Matrix (Action):\n", action_cm)
         
         # Crear carpeta para guardar resultados si no existe
