@@ -5,6 +5,19 @@ import torchvision.models.video as video_models
 from mamba_ssm import Mamba
 from timm.models.layers import DropPath
 
+
+class TemporalAttention(nn.Module):
+    def __init__(self, d_model, num_heads=4):
+        super().__init__()
+        self.attention = nn.MultiheadAttention(embed_dim=d_model, num_heads=num_heads, batch_first=True)
+        self.norm = nn.LayerNorm(d_model)
+
+    def forward(self, x):
+        # x shape: [B, T, D]
+        attn_output, _ = self.attention(x, x, x)
+        attn_output = self.norm(attn_output + x)  # Residual connection
+        return attn_output.mean(dim=1)  # Pooling temporal ponderado
+        
 # =========================
 # Multi-Head Attention Layer
 # =========================
@@ -36,7 +49,7 @@ class LiftingNet(nn.Module):
 # =========================
 # ViewMambaAggregate Mejorado
 # =========================
-class ViewMambaAggregate(nn.Module):
+class ViewMambaAggregateAnt(nn.Module):
     def __init__(self, model, d_model=512, d_state=16, d_conv=4, expand=2, use_attention=True):
         super().__init__()
         self.model = model
@@ -57,6 +70,40 @@ class ViewMambaAggregate(nn.Module):
         pooled_view = self.norm(pooled_view)
         return pooled_view, mamba_out
 
+class ViewMambaAggregate(nn.Module):
+    def __init__(self, model, d_model=512, d_state=16, d_conv=4, expand=2, use_attention=True):
+        super().__init__()
+        self.model = model
+        self.mamba = Mamba(d_model=d_model, d_state=d_state, d_conv=d_conv, expand=expand)
+        self.lifting_net = LiftingNet(d_model)
+        self.use_attention = use_attention
+        self.view_attention = MultiHeadAttention(d_model) if use_attention else None
+        self.temporal_attention = TemporalAttention(d_model)
+        self.norm = nn.LayerNorm(d_model)
+
+    def forward(self, mvimages):
+        B, V, C, T, H, W = mvimages.shape
+        batched = mvimages.view(B * V, C, T, H, W)
+        features = self.model(batched)  # [B*V, D]
+        features = features.view(B, V, -1)  # [B, V, D]
+
+        mamba_out = self.mamba(features)  # [B, V, D]
+        mamba_out = self.lifting_net(mamba_out)  # [B, V, D]
+
+        # Atención temporal sobre vistas (asumiendo que cada vista representa un segmento temporal)
+        temporal_out = self.temporal_attention(mamba_out)  # [B, D]
+
+        # Atención entre vistas
+        if self.use_attention:
+            view_out = self.view_attention(mamba_out)  # [B, D]
+        else:
+            view_out = mamba_out.mean(dim=1)  # [B, D]
+
+        # Combinación de atención temporal y atención entre vistas
+        pooled_view = self.norm(temporal_out + view_out)  # [B, D]
+
+        return pooled_view, mamba_out
+        
 # =========================
 # Modelo Multi-tarea Mejorado
 # =========================
