@@ -651,7 +651,7 @@ def train_model(
                         "confidence_action": float(a_probs[a_pred])
                     }
 
-                pbar.set_postfix({'foul_loss': train_foul_loss / (pbar.n + 1), 'action_loss': train_action_loss / (pbar.n + 1)})
+                pbar.set_postfix({'foulLoss': train_foul_loss / (pbar.n + 1), 'actionLoss': train_action_loss / (pbar.n + 1)})
 
                 del batch_clips, foul_logits, action_logits, loss
                 torch.cuda.empty_cache()
