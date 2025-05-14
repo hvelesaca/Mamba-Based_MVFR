@@ -49,7 +49,7 @@ class LiftingNet(nn.Module):
 # =========================
 # ViewMambaAggregate Mejorado
 # =========================
-class ViewMambaAggregate2(nn.Module):
+class ViewMambaAggregate(nn.Module):
     def __init__(self, model, d_model=512, d_state=16, d_conv=4, expand=2, use_attention=True):
         super().__init__()
         self.model = model
@@ -70,7 +70,7 @@ class ViewMambaAggregate2(nn.Module):
         pooled_view = self.norm(pooled_view)
         return pooled_view, mamba_out
 
-class ViewMambaAggregate(nn.Module):
+class ViewMambaAggregate2(nn.Module):
     def __init__(self, model, d_model=512, d_state=16, d_conv=4, expand=2, use_attention=True):
         super().__init__()
         self.model = model
