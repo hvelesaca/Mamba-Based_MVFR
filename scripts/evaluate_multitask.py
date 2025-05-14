@@ -383,7 +383,6 @@ if __name__ == "__main__":
     if torch.cuda.device_count() > 1:
         print("Usando", torch.cuda.device_count(), "GPUs")
         model = torch.nn.DataParallel(model)
-
     model = model.to(device)
 
     model.load_state_dict(torch.load("/kaggle/working/Mamba-Based_MVFR/models/best_multitask_mamba_model_epoch2_ba29.9148.pth", map_location=device), strict=False)
