@@ -515,7 +515,7 @@ def get_augmentations(device, use_extra_aug=True):
 
 def train_model(
     model, train_loader, val_loader, foul_criterion, action_criterion,
-    num_epochs=200, device="cuda:0",
+    num_epochs=100, device="cuda:0",
     use_focal_loss=False, use_mixup=False, use_cutmix=False, use_extra_aug=True,
     scheduler_type="onecycle"):
 
@@ -537,7 +537,7 @@ def train_model(
 
     os.makedirs("models", exist_ok=True)
     best_val_ba = 0.0
-    patience = 50
+    patience = 20
     patience_counter = 0
     accumulation_steps = 2
 
@@ -552,6 +552,18 @@ def train_model(
         json.dump(val_gt_action_json, f)
 
     for epoch in range(num_epochs):
+        if patience_counter >= 5:
+            print("Gradually unfreezing backbone...")
+            gradual_unfreeze(model, current_epoch=epoch, total_unfreeze_epochs=5)
+        
+            optimizer = optim.AdamW([
+                {'params': model.backbone.parameters(), 'lr': 1e-5},
+                {'params': model.head.parameters(), 'lr': 5e-5}
+            ], weight_decay=0.01)
+        
+            scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=5, T_mult=2)
+            
+        """
         if epoch == 2:
             print("Unfreezing the backbone...")
             if hasattr(model, "module"):
@@ -564,7 +576,8 @@ def train_model(
                 scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs-epoch)
             else:
                 scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=5e-5, total_steps=(num_epochs - epoch) * len(train_loader), pct_start=0.1)
-
+        """
+        
         model.train()
         train_foul_loss = 0.0
         train_action_loss = 0.0
