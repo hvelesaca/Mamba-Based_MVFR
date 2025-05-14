@@ -531,7 +531,7 @@ def train_model(
     optimizer = optim.AdamW(model.parameters(), lr=1e-4, betas=(0.9, 0.999), eps=1e-07, weight_decay=1e-2, amsgrad=False)
 
     if scheduler_type == "stepLR":    
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=3, gamma=0.1)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
     elif scheduler_type == "cosine":
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
     else:
@@ -543,7 +543,7 @@ def train_model(
     best_val_ba = 0.0
     patience = 10
     patience_counter = 0
-    accumulation_steps = 2
+    accumulation_steps = 3
 
     # CAMBIO: Guardar los 3 mejores modelos
     top_models = []
@@ -556,7 +556,7 @@ def train_model(
         json.dump(val_gt_action_json, f)
         
     for epoch in range(num_epochs):       
-        if epoch == 5:
+        if epoch == 3:
             print("Unfreezing the backbone...")
             if hasattr(model, "module"):
                 model.module.unfreeze_partial_backbone()
@@ -567,7 +567,7 @@ def train_model(
             optimizer = optim.AdamW(model.parameters(), lr=2e-5, weight_decay=1e-2)
                 
             if scheduler_type == "stepLR":
-                scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=3, gamma=0.1)
+                scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
             elif scheduler_type == "cosine":
                 scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs-epoch)
             else:
