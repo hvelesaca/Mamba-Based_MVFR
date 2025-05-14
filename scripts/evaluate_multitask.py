@@ -378,7 +378,14 @@ if __name__ == "__main__":
                              num_workers=0, pin_memory=True)
     
     # Load the trained MultiTaskModel
-    multitask_model = MultiTaskModelMamba().to(device) 
+    multitask_model = MultiTaskModelMamba() 
+
+    if torch.cuda.device_count() > 1:
+        print("Usando", torch.cuda.device_count(), "GPUs")
+        model = torch.nn.DataParallel(model)
+
+    model = model.to(device)
+
     multitask_model.load_state_dict(torch.load("/kaggle/working/Mamba-Based_MVFR/models/best_multitask_mamba_model_epoch2_ba29.9148.pth", map_location=device), strict=False)
 
     print(f"\nEvaluating Trained MultiTask Model on {args.dataset_type.capitalize()} Test Set...")
