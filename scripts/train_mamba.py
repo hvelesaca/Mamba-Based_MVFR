@@ -590,7 +590,7 @@ def train_model(
 
         optimizer.zero_grad()
 
-        with tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs} [Train MultiTaskMamba]") as pbar:
+        with tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs} [Train MultiTaskMamba]", ncols=150,  leave=True) as pbar:
             for batch_idx, (batch_clips, foul_labels, action_labels, action_ids) in enumerate(pbar):
                 batch_clips = batch_clips.to(device, non_blocking=True)
                 foul_labels = foul_labels.to(device, non_blocking=True)
