@@ -528,11 +528,21 @@ def train_model(
 
     augment = get_augmentations(device, use_extra_aug=use_extra_aug) if "train" in train_loader.dataset.split else nn.Identity()
 
+    # Ejemplo de discriminative learning rates
+    #optimizer = torch.optim.AdamW([
+    #{'params': model.backbone.parameters(), 'lr': 1e-5},
+    #{'params': model.aggregation_model.parameters(), 'lr': 1e-4},
+    #{'params': model.foul_branch.parameters(), 'lr': 1e-4},
+    #{'params': model.action_branch.parameters(), 'lr': 1e-4},
+    #], weight_decay=1e-2)
     optimizer = optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-2)
     #optimizer = optim.AdamW(model.parameters(), lr=1e-4, betas=(0.9, 0.999), eps=1e-07, weight_decay=1e-2, amsgrad=False)
 
-    if scheduler_type == "stepLR":    
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
+    if scheduler_type == "cosineWarm":
+        # Scheduler con CosineAnnealingWarmRestarts
+        scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2, eta_min=1e-6)
+    elif scheduler_type == "stepLR":    
+        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
     elif scheduler_type == "cosine":
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
     else:
@@ -567,7 +577,10 @@ def train_model(
             # Al descongelar, reduce la tasa de aprendizaje para evitar cambios bruscos
             optimizer = optim.AdamW(model.parameters(), lr=2e-5, weight_decay=1e-2)
                 
-            if scheduler_type == "stepLR":
+            if scheduler_type == "cosineWarm":
+                # Scheduler con CosineAnnealingWarmRestarts
+                scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2, eta_min=1e-6)
+            elif scheduler_type == "stepLR":
                 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
             elif scheduler_type == "cosine":
                 scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs-epoch)
@@ -850,5 +863,5 @@ if __name__ == "__main__":
         use_mixup=False,       # CAMBIO: pon True para usar mixup
         use_cutmix=False,      # CAMBIO: pon True para usar cutmix (no implementado aquí)
         use_extra_aug=True,    # CAMBIO: pon False para solo augmentaciones básicas
-        scheduler_type="stepLR"  # CAMBIO: pon "cosine, onecycle, stepLR" para CosineAnnealingLR
+        scheduler_type="cosineWarm"  # CAMBIO: pon "cosine, cosineWarm, onecycle, stepLR" para CosineAnnealingLR
     )
