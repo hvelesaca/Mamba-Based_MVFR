@@ -162,9 +162,9 @@ class MVFoulDataset(Dataset):
                 clips = torch.load(action_path, weights_only=False).float() / 255.0
 
                 # Limit number of clips per video
-                #if clips.shape[0] > self.max_clips_per_video:
-                #    indices = [0] + list(torch.randperm(clips.shape[0]-1)[:self.max_clips_per_video-1].add(1).tolist())
-                #    clips = clips[indices]
+                if clips.shape[0] > self.max_clips_per_video:
+                    indices = [0] + list(torch.randperm(clips.shape[0]-1)[:self.max_clips_per_video-1].add(1).tolist())
+                    clips = clips[indices]
 
                 # Downsample spatial dimensions if needed
                 if self.downsample_factor > 1:
@@ -205,9 +205,9 @@ class MVFoulDataset(Dataset):
             clips = torch.load(action_path, weights_only=False).float() / 255.0
 
             # Apply same processing as in preload
-            #if clips.shape[0] > self.max_clips_per_video:
-            #    indices = [0] + list(torch.randperm(clips.shape[0]-1)[:self.max_clips_per_video-1].add(1).tolist())
-            #    clips = clips[indices]
+            if clips.shape[0] > self.max_clips_per_video:
+                indices = [0] + list(torch.randperm(clips.shape[0]-1)[:self.max_clips_per_video-1].add(1).tolist())
+                clips = clips[indices]
 
             if self.downsample_factor > 1:
                 _, C, T, H, W = clips.shape
@@ -220,11 +220,11 @@ class MVFoulDataset(Dataset):
                 ).reshape(-1, C, T, new_H, new_W)
 
         # Select clips as before
-        #if clips.shape[0] == 1:
-        #    clips = torch.stack([clips[0], clips[0]])
-        #else:
-        #    random_idx = torch.randint(1, clips.shape[0], (1,)).item()
-        #    clips = torch.stack([clips[0], clips[random_idx]])
+        if clips.shape[0] == 1:
+            clips = torch.stack([clips[0], clips[0]])
+        else:
+            random_idx = torch.randint(1, clips.shape[0], (1,)).item()
+            clips = torch.stack([clips[0], clips[random_idx]])
 
         return clips, torch.tensor(self.foul_labels[actual_idx]), torch.tensor(self.action_labels[actual_idx]), action_id
         
@@ -812,7 +812,7 @@ if __name__ == "__main__":
         split='val',
         preload=True,
         downsample_factor=2,
-        max_clips_per_video=2
+        max_clips_per_video=4
     )
 
     foul_weights, action_weights, train_foul_counts, train_action_counts = compute_class_weights(
