@@ -803,7 +803,7 @@ if __name__ == "__main__":
         curriculum=True,
         preload=True,
         downsample_factor=2,
-        max_clips_per_video=2
+        max_clips_per_video=4
     )
 
     val_dataset = MVFoulDataset(
