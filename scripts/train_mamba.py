@@ -162,9 +162,9 @@ class MVFoulDataset(Dataset):
                 clips = torch.load(action_path, weights_only=False).float() / 255.0
 
                 # Limit number of clips per video
-                if clips.shape[0] > self.max_clips_per_video:
-                    indices = [0] + list(torch.randperm(clips.shape[0]-1)[:self.max_clips_per_video-1].add(1).tolist())
-                    clips = clips[indices]
+                #if clips.shape[0] > self.max_clips_per_video:
+                #    indices = [0] + list(torch.randperm(clips.shape[0]-1)[:self.max_clips_per_video-1].add(1).tolist())
+                #    clips = clips[indices]
 
                 # Downsample spatial dimensions if needed
                 if self.downsample_factor > 1:
@@ -184,7 +184,7 @@ class MVFoulDataset(Dataset):
             for i in range(len(self.action_folders)):
                 action_factor = 1 if self.action_labels[i] not in [5, 6, 7] else (3 if self.action_labels[i] == 5 else 2)
                 foul_factor = 5 if self.foul_labels[i] in [0, 3] else (2 if self.foul_labels[i] == 2 else 1)
-                factor = min(max(action_factor, foul_factor), 30)
+                factor = min(max(action_factor, foul_factor), 50)
                 indices.extend([i] * factor)
             self.indices = indices
             print(f"Number of samples after oversampling: {len(self.indices)}")
@@ -205,9 +205,9 @@ class MVFoulDataset(Dataset):
             clips = torch.load(action_path, weights_only=False).float() / 255.0
 
             # Apply same processing as in preload
-            if clips.shape[0] > self.max_clips_per_video:
-                indices = [0] + list(torch.randperm(clips.shape[0]-1)[:self.max_clips_per_video-1].add(1).tolist())
-                clips = clips[indices]
+            #if clips.shape[0] > self.max_clips_per_video:
+            #    indices = [0] + list(torch.randperm(clips.shape[0]-1)[:self.max_clips_per_video-1].add(1).tolist())
+            #    clips = clips[indices]
 
             if self.downsample_factor > 1:
                 _, C, T, H, W = clips.shape
@@ -220,11 +220,11 @@ class MVFoulDataset(Dataset):
                 ).reshape(-1, C, T, new_H, new_W)
 
         # Select clips as before
-        if clips.shape[0] == 1:
-            clips = torch.stack([clips[0], clips[0]])
-        else:
-            random_idx = torch.randint(1, clips.shape[0], (1,)).item()
-            clips = torch.stack([clips[0], clips[random_idx]])
+        #if clips.shape[0] == 1:
+        #    clips = torch.stack([clips[0], clips[0]])
+        #else:
+        #    random_idx = torch.randint(1, clips.shape[0], (1,)).item()
+        #    clips = torch.stack([clips[0], clips[random_idx]])
 
         return clips, torch.tensor(self.foul_labels[actual_idx]), torch.tensor(self.action_labels[actual_idx]), action_id
         
