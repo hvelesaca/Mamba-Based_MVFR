@@ -48,52 +48,9 @@ class LiftingNet(nn.Module):
 
 # =========================
 # ViewMambaAggregate Mejorado
-# =========================
-class ViewMambaAggregate2(nn.Module):
-    def __init__(self, model, d_model=512, d_state=16, d_conv=4, expand=2, use_attention=True):
-        super().__init__()
-        self.model = model
-        self.mamba = Mamba(d_model=d_model, d_state=d_state, d_conv=d_conv, expand=expand)
-        self.lifting_net = LiftingNet(d_model)
-        self.use_attention = use_attention
-        self.attention = MultiHeadAttention(d_model) if use_attention else None
-        self.norm = nn.LayerNorm(d_model)
-
-    def forward(self, mvimages):
-        B, V, C, T, H, W = mvimages.shape
-        batched = mvimages.view(B * V, C, T, H, W)
-        features = self.model(batched)
-        features = features.view(B, V, -1)
-        mamba_out = self.mamba(features)
-        mamba_out = self.lifting_net(mamba_out)
-        pooled_view = self.attention(mamba_out) if self.use_attention else mamba_out.mean(dim=1)
-        pooled_view = self.norm(pooled_view)
-        return pooled_view, mamba_out
-
-#Improved
-class ViewMambaAggregate2(nn.Module):
-    def __init__(self, model, d_model=512, d_state=16, d_conv=4, expand=2, use_attention=True):
-        super().__init__()
-        self.model = model
-        self.mamba = Mamba(d_model=d_model, d_state=d_state, d_conv=d_conv, expand=expand)
-        self.temporal_attention = TemporalAttention(d_model)
-        self.view_attention = MultiHeadAttention(d_model)
-        self.norm = nn.LayerNorm(d_model)
-
-    def forward(self, mvimages):
-        B, V, C, T, H, W = mvimages.shape
-        batched = mvimages.view(B * V, C, T, H, W)
-        features = self.model(batched).view(B, V, -1)
-
-        mamba_out = self.mamba(features)
-        temporal_out = self.temporal_attention(mamba_out)
-        view_out = self.view_attention(mamba_out)
-
-        combined = self.norm(temporal_out + view_out + mamba_out.mean(dim=1))
-        return combined, mamba_out
-        
+# =========================        
 class ViewMambaAggregate(nn.Module):
-    def __init__(self, model, d_model=512, d_state=16, d_conv=4, expand=2, use_attention=True):
+    def __init__(self, model, d_model=400, d_state=16, d_conv=4, expand=2, use_attention=True):
         super().__init__()
         self.model = model
         self.mamba = Mamba(d_model=d_model, d_state=d_state, d_conv=d_conv, expand=expand)
@@ -136,8 +93,8 @@ class MultiTaskModelMamba(nn.Module):
         self.unfreeze_partial_backbone(layers_to_unfreeze=10)
 
         in_features = self.backbone.head[1].in_features
-        self.backbone.head[1] = nn.Linear(in_features, 512)
-        self.feat_dim = 512
+        self.backbone.head[1] = nn.Linear(in_features, 400)
+        self.feat_dim = 400
 
         self.aggregation_model = ViewMambaAggregate(
             model=self.backbone,
@@ -149,8 +106,8 @@ class MultiTaskModelMamba(nn.Module):
             nn.LayerNorm(self.feat_dim),
             nn.Linear(self.feat_dim, self.feat_dim),
             nn.GELU(),
-            nn.Dropout(dropout),
-            DropPath(drop_path_rate)
+            #nn.Dropout(dropout),
+            #DropPath(drop_path_rate)
         )
 
         self.foul_attention = MultiHeadAttention(self.feat_dim)
@@ -160,7 +117,7 @@ class MultiTaskModelMamba(nn.Module):
             nn.LayerNorm(self.feat_dim),
             nn.Linear(self.feat_dim, 256),
             nn.GELU(),
-            nn.Dropout(dropout),
+            #nn.Dropout(dropout),
             nn.Linear(256, 4)
         )
 
@@ -168,7 +125,7 @@ class MultiTaskModelMamba(nn.Module):
             nn.LayerNorm(self.feat_dim),
             nn.Linear(self.feat_dim, 256),
             nn.GELU(),
-            nn.Dropout(dropout),
+            #nn.Dropout(dropout),
             nn.Linear(256, 8)
         )
 
