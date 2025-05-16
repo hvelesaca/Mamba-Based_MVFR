@@ -848,8 +848,8 @@ if __name__ == "__main__":
     print("\nTraining MultiTaskMamba Model...")
     multitask_model = MultiTaskModelMamba()
     # CAMBIO: Aumentar label smoothing a 0.1
-    foul_criterion = nn.CrossEntropyLoss(weight=foul_weights.to(device), label_smoothing=0.01)
-    action_criterion = nn.CrossEntropyLoss(weight=action_weights.to(device), label_smoothing=0.01)
+    foul_criterion = nn.CrossEntropyLoss(weight=foul_weights.to(device), label_smoothing=0.05)
+    action_criterion = nn.CrossEntropyLoss(weight=action_weights.to(device), label_smoothing=0.05)
     # CAMBIO: Puedes activar focal loss, mixup, cutmix, augment extra y scheduler cosine aquí:
 
     print("Foul weights:", foul_weights)
