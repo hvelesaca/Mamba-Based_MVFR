@@ -156,7 +156,8 @@ class MVFoulDataset(Dataset):
         if self.preload:
             print(f"Preloading {len(self.action_folders)} .pt files for {split} split...")
             self.clips_cache = {}
-            for folder in self.action_folders:
+            for folder in tqdm(self.action_folders, desc="Cargando clips"):
+            #for folder in self.action_folders:
                 action_id = folder.replace(".pt", "").replace("action_", "")
                 action_path = os.path.join(self.folder_to_dir[folder], folder)
                 clips = torch.load(action_path, weights_only=False).float() / 255.0
@@ -175,7 +176,8 @@ class MVFoulDataset(Dataset):
                     else:
                         # Si solo hay un clip, repetir el primero
                         indices += [0] * (self.max_clips_per_video - num_available_clips)            
-                print("indices clips:", indices)
+                
+                tqdm.write(f"indices clips: {indices}")
                 clips = clips[indices]
 
                 # Downsample spatial dimensions if needed
@@ -230,7 +232,7 @@ class MVFoulDataset(Dataset):
                 else:
                     # Si solo hay un clip, repetir el primero
                     indices += [0] * (self.max_clips_per_video - num_available_clips)            
-            print("indices clips:", indices)
+            #print("indices clips:", indices)
             clips = clips[indices]
 
             # Apply same processing as in preload
@@ -832,7 +834,7 @@ if __name__ == "__main__":
         curriculum=True,
         preload=True,
         downsample_factor=2,
-        max_clips_per_video=2
+        max_clips_per_video=4
     )
 
     val_dataset = MVFoulDataset(
@@ -841,7 +843,7 @@ if __name__ == "__main__":
         split='val',
         preload=True,
         downsample_factor=2,
-        max_clips_per_video=2
+        max_clips_per_video=4
     )
 
     foul_weights, action_weights, train_foul_counts, train_action_counts = compute_class_weights(
