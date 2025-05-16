@@ -830,7 +830,7 @@ if __name__ == "__main__":
         curriculum=True,
         preload=True,
         downsample_factor=2,
-        max_clips_per_video=4
+        max_clips_per_video=2
     )
 
     val_dataset = MVFoulDataset(
@@ -839,7 +839,7 @@ if __name__ == "__main__":
         split='val',
         preload=True,
         downsample_factor=2,
-        max_clips_per_video=4
+        max_clips_per_video=2
     )
 
     foul_weights, action_weights, train_foul_counts, train_action_counts = compute_class_weights(
