@@ -489,6 +489,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate MultiTaskModel on test dataset.")
     parser.add_argument('--dataset_type', type=str, default='filtered', choices=['filtered', 'whole'],
                         help="Type of dataset to evaluate: 'filtered' (with metrics) or 'whole' (predictions only)")
+    parser.add_argument('--model_name', type=str, default='', help="Model name to test results")
     args = parser.parse_args()
     
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -508,7 +509,7 @@ if __name__ == "__main__":
         model = torch.nn.DataParallel(model)
     model = model.to(device)
 
-    model.load_state_dict(torch.load("/kaggle/working/Mamba-Based_MVFR/models/best_multitask_mamba_model_epoch3_ba30.8724.pth", map_location=device), strict=False)
+    model.load_state_dict(torch.load(args.model_name, map_location=device), strict=False)
 
     print(f"\nEvaluating Trained MultiTask Model on {args.dataset_type.capitalize()} Test Set...")
     evaluate_multitask_model(model, test_loader, args.dataset_type, device)
