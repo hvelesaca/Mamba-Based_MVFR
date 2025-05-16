@@ -176,8 +176,6 @@ class MVFoulDataset(Dataset):
                     else:
                         # Si solo hay un clip, repetir el primero
                         indices += [0] * (self.max_clips_per_video - num_available_clips)            
-                
-                #tqdm.write(f"indices clips: {indices}")
                 clips = clips[indices]
 
                 # Downsample spatial dimensions if needed
@@ -234,11 +232,6 @@ class MVFoulDataset(Dataset):
                     indices += [0] * (self.max_clips_per_video - num_available_clips)            
             
             clips = clips[indices]
-
-            # Apply same processing as in preload
-            #if clips.shape[0] > self.max_clips_per_video:
-            #    indices = [0] + list(torch.randperm(clips.shape[0]-1)[:self.max_clips_per_video-1].add(1).tolist())
-            #    clips = clips[indices]
 
             if self.downsample_factor > 1:
                 _, C, T, H, W = clips.shape
@@ -832,9 +825,9 @@ if __name__ == "__main__":
         train_json_paths,
         split='train',
         curriculum=True,
-        preload=True,
+        preload=False,
         downsample_factor=2,
-        max_clips_per_video=3
+        max_clips_per_video=4
     )
 
     val_dataset = MVFoulDataset(
@@ -843,7 +836,7 @@ if __name__ == "__main__":
         split='val',
         preload=True,
         downsample_factor=2,
-        max_clips_per_video=3
+        max_clips_per_video=4
     )
 
     foul_weights, action_weights, train_foul_counts, train_action_counts = compute_class_weights(
