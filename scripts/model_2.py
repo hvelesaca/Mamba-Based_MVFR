@@ -5,7 +5,6 @@ import torchvision.models.video as video_models
 from mamba_ssm import Mamba
 from timm.models.layers import DropPath
 
-
 class TemporalAttention(nn.Module):
     def __init__(self, d_model, num_heads=4):
         super().__init__()
@@ -90,7 +89,7 @@ class MultiTaskModelMamba(nn.Module):
     def __init__(self, dropout=0.7, drop_path_rate=0.3):
         super().__init__()
         self.backbone = video_models.mvit_v2_s(weights=video_models.MViT_V2_S_Weights.KINETICS400_V1)
-        self.unfreeze_partial_backbone(layers_to_unfreeze=10)
+        self.unfreeze_partial_backbone(layers_to_unfreeze=8)
 
         in_features = self.backbone.head[1].in_features
         self.backbone.head[1] = nn.Linear(in_features, 400)
