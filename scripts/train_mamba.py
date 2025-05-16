@@ -540,7 +540,7 @@ def train_model(
 
     if scheduler_type == "cosineWarm":
         # Scheduler con CosineAnnealingWarmRestarts
-        scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2, eta_min=1e-6)
+        scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=5, T_mult=2, eta_min=1e-6)
     elif scheduler_type == "stepLR":    
         scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
     elif scheduler_type == "cosine":
@@ -567,7 +567,7 @@ def train_model(
         json.dump(val_gt_action_json, f)
         
     for epoch in range(num_epochs):       
-        if epoch == 7:
+        if epoch == 3:
             print("Unfreezing the backbone...")
             if hasattr(model, "module"):
                 model.module.unfreeze_partial_backbone()
@@ -576,17 +576,18 @@ def train_model(
 
             # Al descongelar, reduce la tasa de aprendizaje para evitar cambios bruscos
             optimizer = optim.AdamW(model.parameters(), lr=2e-5, weight_decay=1e-2)
-                
+
+            """
             if scheduler_type == "cosineWarm":
                 # Scheduler con CosineAnnealingWarmRestarts
-                scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2, eta_min=1e-6)
+                scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=5, T_mult=2, eta_min=1e-6)
             elif scheduler_type == "stepLR":
                 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
             elif scheduler_type == "cosine":
                 scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs-epoch)
             else:
                 scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=5e-5, total_steps=(num_epochs - epoch) * len(train_loader), pct_start=0.1)
-        
+            """
         model.train()
         train_foul_loss = 0.0
         train_action_loss = 0.0
@@ -802,7 +803,7 @@ if __name__ == "__main__":
         split='train',
         curriculum=True,
         preload=True,
-        downsample_factor=2,
+        downsample_factor=1,
         max_clips_per_video=4
     )
 
@@ -811,7 +812,7 @@ if __name__ == "__main__":
         "/kaggle/input/datasetmvfd/datasetMVFD/test_preprocessed/annotations.json",
         split='val',
         preload=True,
-        downsample_factor=2,
+        downsample_factor=1,
         max_clips_per_video=4
     )
 
