@@ -639,8 +639,8 @@ def train_model(
                 with autocast():
                     foul_logits, action_logits = model(batch_clips)
                     if use_focal_loss:
-                        foul_loss = ClassBalancedFocalLoss(train_foul_counts)(foul_logits, foul_labels)
-                        action_loss = ClassBalancedFocalLoss(train_action_counts)(action_logits, action_labels)
+                        foul_loss = FocalLoss()(foul_logits, foul_labels)
+                        action_loss = FocalLoss()(action_logits, action_labels)
                     elif use_mixup:
                         foul_loss = mixup_criterion(foul_criterion, foul_logits, foul_labels_a, foul_labels_b, lam)
                         action_loss = mixup_criterion(action_criterion, action_logits, action_labels_a, action_labels_b, lam)
@@ -721,8 +721,8 @@ def train_model(
                 with autocast():
                     foul_logits, action_logits = model(batch_clips)
                     if use_focal_loss:
-                        foul_loss = ClassBalancedFocalLoss(train_foul_counts)(foul_logits, foul_labels)
-                        action_loss = ClassBalancedFocalLoss(train_action_counts)(action_logits, action_labels)
+                        foul_loss = FocalLoss()(foul_logits, foul_labels)
+                        action_loss = FocalLoss()(action_logits, action_labels)
                     else:
                         foul_loss = foul_criterion(foul_logits, foul_labels)
                         action_loss = action_criterion(action_logits, action_labels)
@@ -825,8 +825,8 @@ if __name__ == "__main__":
         train_json_paths,
         split='train',
         curriculum=True,
-        preload=False,
-        downsample_factor=2,
+        preload=True,
+        downsample_factor=3,
         max_clips_per_video=4
     )
 
@@ -835,7 +835,7 @@ if __name__ == "__main__":
         "/kaggle/input/datasetmvfd/datasetMVFD/test_preprocessed/annotations.json",
         split='val',
         preload=True,
-        downsample_factor=2,
+        downsample_factor=3,
         max_clips_per_video=4
     )
 
