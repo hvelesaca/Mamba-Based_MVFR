@@ -542,7 +542,7 @@ def train_model(
     model, train_loader, val_loader, foul_criterion, action_criterion,
     num_epochs=100, device="cuda:0",
     use_focal_loss=False, use_mixup=False, use_cutmix=False, use_extra_aug=True,
-    scheduler_type="onecycle", train_foul_counts=0, train_action_counts=0):
+    scheduler_type="onecycle"):
 
     if torch.cuda.device_count() > 1:
         print("Usando", torch.cuda.device_count(), "GPUs")
@@ -559,12 +559,14 @@ def train_model(
     #{'params': model.foul_branch.parameters(), 'lr': 1e-4},
     #{'params': model.action_branch.parameters(), 'lr': 1e-4},
     #], weight_decay=1e-2)
-    optimizer = optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-2)
     #optimizer = optim.AdamW(model.parameters(), lr=1e-4, betas=(0.9, 0.999), eps=1e-07, weight_decay=1e-2, amsgrad=False)
+    #optimizer = optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-2)
+        
+    optimizer = torch.optim.AdamW(model.parameters(), lr=5e-5, weight_decay=1e-2)
 
     if scheduler_type == "cosineWarm":
         # Scheduler con CosineAnnealingWarmRestarts
-        scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=5, T_mult=2, eta_min=1e-6)
+        scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2, eta_min=1e-6)
     elif scheduler_type == "stepLR":    
         scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
     elif scheduler_type == "cosine":
@@ -866,8 +868,8 @@ if __name__ == "__main__":
     # Crea el sampler
     sampler = WeightedRandomSampler(combined_sample_weights, num_samples=len(train_dataset), replacement=True)
 
-    train_loader = DataLoader(train_dataset, sampler=sampler, batch_size=8, shuffle=False, collate_fn=custom_collate, num_workers=8, pin_memory=True, drop_last=True)
-    val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False, collate_fn=custom_collate, num_workers=8, pin_memory=True)
+    train_loader = DataLoader(train_dataset, sampler=sampler, batch_size=16, shuffle=False, collate_fn=custom_collate, num_workers=8, pin_memory=True, drop_last=True)
+    val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False, collate_fn=custom_collate, num_workers=8, pin_memory=True)
 
     print("\nTraining MultiTaskMamba Model...")
     multitask_model = MultiTaskModelMamba()
@@ -887,6 +889,5 @@ if __name__ == "__main__":
         use_mixup=False,       # CAMBIO: pon True para usar mixup
         use_cutmix=False,      # CAMBIO: pon True para usar cutmix (no implementado aquí)
         use_extra_aug=True,    # CAMBIO: pon False para solo augmentaciones básicas
-        scheduler_type="cosineWarm",  # CAMBIO: pon "cosine, cosineWarm, onecycle, stepLR" para CosineAnnealingLR
-        train_foul_counts=0, train_action_counts=0
+        scheduler_type="cosineWarm"  # CAMBIO: pon "cosine, cosineWarm, onecycle, stepLR" para CosineAnnealingLR
     )
