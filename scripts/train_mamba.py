@@ -567,6 +567,7 @@ def train_model(
         json.dump(val_gt_action_json, f)
         
     for epoch in range(num_epochs):       
+        """
         if epoch == 3:
             print("Unfreezing the backbone...")
             if hasattr(model, "module"):
@@ -576,8 +577,6 @@ def train_model(
 
             # Al descongelar, reduce la tasa de aprendizaje para evitar cambios bruscos
             optimizer = optim.AdamW(model.parameters(), lr=2e-5, weight_decay=1e-2)
-
-            """
             if scheduler_type == "cosineWarm":
                 # Scheduler con CosineAnnealingWarmRestarts
                 scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=5, T_mult=2, eta_min=1e-6)
@@ -587,7 +586,7 @@ def train_model(
                 scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs-epoch)
             else:
                 scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=5e-5, total_steps=(num_epochs - epoch) * len(train_loader), pct_start=0.1)
-            """
+        """
         model.train()
         train_foul_loss = 0.0
         train_action_loss = 0.0
