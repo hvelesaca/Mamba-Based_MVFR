@@ -828,7 +828,7 @@ if __name__ == "__main__":
         split='train',
         curriculum=True,
         preload=True,
-        downsample_factor=3,
+        downsample_factor=2,
         max_clips_per_video=3
     )
 
@@ -837,7 +837,7 @@ if __name__ == "__main__":
         "/kaggle/input/datasetmvfd/datasetMVFD/test_preprocessed/annotations.json",
         split='val',
         preload=True,
-        downsample_factor=3,
+        downsample_factor=2,
         max_clips_per_video=3
     )
 
@@ -889,5 +889,5 @@ if __name__ == "__main__":
         use_mixup=False,       # CAMBIO: pon True para usar mixup
         use_cutmix=False,      # CAMBIO: pon True para usar cutmix (no implementado aquí)
         use_extra_aug=True,    # CAMBIO: pon False para solo augmentaciones básicas
-        scheduler_type="cosineWarm"  # CAMBIO: pon "cosine, cosineWarm, onecycle, stepLR" para CosineAnnealingLR
+        scheduler_type="stepLR"  # CAMBIO: pon "cosine, cosineWarm, onecycle, stepLR" para CosineAnnealingLR
     )
