@@ -196,7 +196,7 @@ class MVFoulDataset(Dataset):
             for i in range(len(self.action_folders)):
                 action_factor = 1 if self.action_labels[i] not in [5, 6, 7] else (3 if self.action_labels[i] == 5 else 2)
                 foul_factor = 5 if self.foul_labels[i] in [0, 3] else (2 if self.foul_labels[i] == 2 else 1)
-                factor = min(max(action_factor, foul_factor), 50)
+                factor = min(max(action_factor, foul_factor), 35)
                 indices.extend([i] * factor)
             self.indices = indices
             print(f"Number of samples after oversampling: {len(self.indices)}")
@@ -562,7 +562,7 @@ def train_model(
     #optimizer = optim.AdamW(model.parameters(), lr=1e-4, betas=(0.9, 0.999), eps=1e-07, weight_decay=1e-2, amsgrad=False)
     #optimizer = optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-2)
         
-    optimizer = torch.optim.AdamW(model.parameters(), lr=5e-5, weight_decay=1e-2)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=5e-4, weight_decay=1e-2)
 
     if scheduler_type == "cosineWarm":
         # Scheduler con CosineAnnealingWarmRestarts
@@ -578,9 +578,9 @@ def train_model(
 
     os.makedirs("models", exist_ok=True)
     best_val_ba = 0.0
-    patience = 10
+    patience = 5
     patience_counter = 0
-    accumulation_steps = 3
+    accumulation_steps = 2
 
     # CAMBIO: Guardar los 3 mejores modelos
     top_models = []
@@ -874,8 +874,8 @@ if __name__ == "__main__":
     print("\nTraining MultiTaskMamba Model...")
     multitask_model = MultiTaskModelMamba()
     # CAMBIO: Aumentar label smoothing a 0.1
-    foul_criterion = nn.CrossEntropyLoss(weight=foul_weights.to(device), label_smoothing=0.05)
-    action_criterion = nn.CrossEntropyLoss(weight=action_weights.to(device), label_smoothing=0.05)
+    foul_criterion = nn.CrossEntropyLoss(weight=foul_weights.to(device), label_smoothing=0.025)
+    action_criterion = nn.CrossEntropyLoss(weight=action_weights.to(device), label_smoothing=0.025)
     # CAMBIO: Puedes activar focal loss, mixup, cutmix, augment extra y scheduler cosine aquí:
 
     print("Foul weights:", foul_weights)
