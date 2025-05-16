@@ -162,7 +162,7 @@ class MVFoulDataset(Dataset):
                 clips = torch.load(action_path, weights_only=False).float() / 255.0
 
                 num_available_clips = clips.shape[0]
-                if num_available_clips <= self.max_clips_per_video:
+                if num_available_clips >= self.max_clips_per_video:
                     # Caso exacto: tomar todos los clips en orden
                     indices = list(range(self.max_clips_per_video))
                 else:
@@ -175,6 +175,7 @@ class MVFoulDataset(Dataset):
                     else:
                         # Si solo hay un clip, repetir el primero
                         indices += [0] * (self.max_clips_per_video - num_available_clips)            
+                print("indices clips:", indices)
                 clips = clips[indices]
 
                 # Downsample spatial dimensions if needed
@@ -216,7 +217,7 @@ class MVFoulDataset(Dataset):
             clips = torch.load(action_path, weights_only=False).float() / 255.0
 
             num_available_clips = clips.shape[0]
-            if num_available_clips <= self.max_clips_per_video:
+            if num_available_clips >= self.max_clips_per_video:
                 # Caso exacto: tomar todos los clips en orden
                 indices = list(range(self.max_clips_per_video))
             else:
@@ -229,6 +230,7 @@ class MVFoulDataset(Dataset):
                 else:
                     # Si solo hay un clip, repetir el primero
                     indices += [0] * (self.max_clips_per_video - num_available_clips)            
+            print("indices clips:", indices)
             clips = clips[indices]
 
             # Apply same processing as in preload
