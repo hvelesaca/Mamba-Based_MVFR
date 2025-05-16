@@ -518,7 +518,7 @@ def train_model(
     model, train_loader, val_loader, foul_criterion, action_criterion,
     num_epochs=100, device="cuda:0",
     use_focal_loss=False, use_mixup=False, use_cutmix=False, use_extra_aug=True,
-    scheduler_type="onecycle", train_foul_counts, train_action_counts):
+    scheduler_type="onecycle", train_foul_counts=0, train_action_counts=0):
 
     if torch.cuda.device_count() > 1:
         print("Usando", torch.cuda.device_count(), "GPUs")
@@ -864,5 +864,5 @@ if __name__ == "__main__":
         use_cutmix=False,      # CAMBIO: pon True para usar cutmix (no implementado aquí)
         use_extra_aug=True,    # CAMBIO: pon False para solo augmentaciones básicas
         scheduler_type="cosineWarm",  # CAMBIO: pon "cosine, cosineWarm, onecycle, stepLR" para CosineAnnealingLR
-        train_foul_counts, train_action_counts
+        train_foul_counts=0, train_action_counts=0
     )
