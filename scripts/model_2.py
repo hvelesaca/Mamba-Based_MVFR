@@ -70,7 +70,29 @@ class ViewMambaAggregate2(nn.Module):
         pooled_view = self.norm(pooled_view)
         return pooled_view, mamba_out
 
+#Improved
 class ViewMambaAggregate(nn.Module):
+    def __init__(self, model, d_model=512, d_state=16, d_conv=4, expand=2, use_attention=True):
+        super().__init__()
+        self.model = model
+        self.mamba = Mamba(d_model=d_model, d_state=d_state, d_conv=d_conv, expand=expand)
+        self.temporal_attention = TemporalAttention(d_model)
+        self.view_attention = MultiHeadAttention(d_model)
+        self.norm = nn.LayerNorm(d_model)
+
+    def forward(self, mvimages):
+        B, V, C, T, H, W = mvimages.shape
+        batched = mvimages.view(B * V, C, T, H, W)
+        features = self.model(batched).view(B, V, -1)
+
+        mamba_out = self.mamba(features)
+        temporal_out = self.temporal_attention(mamba_out)
+        view_out = self.view_attention(mamba_out)
+
+        combined = self.norm(temporal_out + view_out + mamba_out.mean(dim=1))
+        return combined, mamba_out
+        
+class ViewMambaAggregateAnt(nn.Module):
     def __init__(self, model, d_model=512, d_state=16, d_conv=4, expand=2, use_attention=True):
         super().__init__()
         self.model = model
@@ -108,7 +130,7 @@ class ViewMambaAggregate(nn.Module):
 # Modelo Multi-tarea Mejorado
 # =========================
 class MultiTaskModelMamba(nn.Module):
-    def __init__(self, dropout=0.5, drop_path_rate=0.1):
+    def __init__(self, dropout=0.7, drop_path_rate=0.3):
         super().__init__()
         self.backbone = video_models.mvit_v2_s(weights=video_models.MViT_V2_S_Weights.KINETICS400_V1)
         self.unfreeze_partial_backbone(layers_to_unfreeze=4)
