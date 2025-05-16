@@ -49,11 +49,11 @@ class LiftingNet(nn.Module):
 # ViewMambaAggregate Mejorado
 # =========================        
 class ViewMambaAggregate(nn.Module):
-    def __init__(self, model, d_model=400, d_state=16, d_conv=4, expand=2, use_attention=True):
+    def __init__(self, model, d_model=400, d_state=16, d_conv=4, expand=2, use_attention=True, lifting_net=nn.Sequential()):
         super().__init__()
         self.model = model
         self.mamba = Mamba(d_model=d_model, d_state=d_state, d_conv=d_conv, expand=expand)
-        self.lifting_net = LiftingNet(d_model)
+        self.lifting_net = lifting_net
         self.use_attention = use_attention
         self.view_attention = MultiHeadAttention(d_model) if use_attention else None
         self.temporal_attention = TemporalAttention(d_model)
@@ -98,7 +98,8 @@ class MultiTaskModelMamba(nn.Module):
         self.aggregation_model = ViewMambaAggregate(
             model=self.backbone,
             d_model=self.feat_dim,
-            use_attention=True
+            use_attention=True,
+            #lifting_net=LiftingNet(d_model)
         )
 
         self.shared_inter = nn.Sequential(
