@@ -1076,6 +1076,6 @@ if __name__ == "__main__":
         use_cutmix=False,      # CAMBIO: pon True para usar cutmix (no implementado aquí)
         use_extra_aug=True,    # CAMBIO: pon False para solo augmentaciones básicas
         scheduler_type="cosineWarm",  # CAMBIO: pon "cosine, cosineWarm, onecycle, stepLR" para CosineAnnealingLR
-        foul_weights.to(device),
-        action_weights.to(device)
+        foul_weights = foul_weights.to(device),
+        action_weights = action_weights.to(device)
     )
