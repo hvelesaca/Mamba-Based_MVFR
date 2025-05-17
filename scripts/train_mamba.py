@@ -875,8 +875,8 @@ if __name__ == "__main__":
         split='train',
         curriculum=True,
         preload=True,
-        downsample_factor=3,
-        max_clips_per_video=3
+        downsample_factor=2,
+        max_clips_per_video=2
     )
 
     val_dataset = MVFoulDataset(
@@ -884,8 +884,8 @@ if __name__ == "__main__":
         "/kaggle/input/datasetmvfd/datasetMVFD/test_preprocessed/annotations.json",
         split='val',
         preload=True,
-        downsample_factor=3,
-        max_clips_per_video=3
+        downsample_factor=2,
+        max_clips_per_video=2
     )
 
     foul_weights, action_weights, train_foul_counts, train_action_counts = compute_class_weights(
