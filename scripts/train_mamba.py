@@ -915,8 +915,8 @@ if __name__ == "__main__":
     # Crea el sampler
     sampler = WeightedRandomSampler(combined_sample_weights, num_samples=len(train_dataset), replacement=True)
 
-    train_loader = DataLoader(train_dataset, sampler=sampler, batch_size=10, shuffle=False, collate_fn=custom_collate, num_workers=8, pin_memory=True, drop_last=True)
-    val_loader = DataLoader(val_dataset, batch_size=10, shuffle=False, collate_fn=custom_collate, num_workers=8, pin_memory=True)
+    train_loader = DataLoader(train_dataset, sampler=sampler, batch_size=10, shuffle=False, collate_fn=custom_collate, num_workers=4, pin_memory=True, drop_last=True)
+    val_loader = DataLoader(val_dataset, batch_size=10, shuffle=False, collate_fn=custom_collate, num_workers=4, pin_memory=True)
 
     print("\nTraining MultiTaskMamba Model...")
     multitask_model = MultiTaskModelMamba()
