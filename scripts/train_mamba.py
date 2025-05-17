@@ -706,7 +706,7 @@ def train_model(
     model, train_loader, val_loader, foul_criterion, action_criterion,
     num_epochs=100, device="cuda:0",
     use_focal_loss=False, use_mixup=False, use_cutmix=False, use_extra_aug=True,
-    scheduler_type="onecycle", foul_weights, action_weights):
+    scheduler_type="onecycle", foul_weights=None, action_weights=None):
 
     if torch.cuda.device_count() > 1:
         print("Usando", torch.cuda.device_count(), "GPUs")
