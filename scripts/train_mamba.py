@@ -196,7 +196,7 @@ class MVFoulDataset(Dataset):
             for i in range(len(self.action_folders)):
                 action_factor = 1 if self.action_labels[i] not in [5, 6, 7] else (3 if self.action_labels[i] == 5 else 2)
                 foul_factor = 5 if self.foul_labels[i] in [0, 3] else (2 if self.foul_labels[i] == 2 else 1)
-                factor = min(max(action_factor, foul_factor), 35)
+                factor = min(max(action_factor, foul_factor), 50)
                 indices.extend([i] * factor)
             self.indices = indices
             print(f"Number of samples after oversampling: {len(self.indices)}")
@@ -885,7 +885,7 @@ if __name__ == "__main__":
         multitask_model, train_loader, val_loader,
         foul_criterion, action_criterion,
         device=device,
-        use_focal_loss=True,  # CAMBIO: pon True para usar focal loss
+        use_focal_loss=False,  # CAMBIO: pon True para usar focal loss
         use_mixup=False,       # CAMBIO: pon True para usar mixup
         use_cutmix=False,      # CAMBIO: pon True para usar cutmix (no implementado aquí)
         use_extra_aug=True,    # CAMBIO: pon False para solo augmentaciones básicas
