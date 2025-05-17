@@ -937,9 +937,9 @@ if __name__ == "__main__":
         multitask_model, train_loader, val_loader,
         foul_criterion, action_criterion,
         device=device,
-        use_focal_loss=False,  # CAMBIO: pon True para usar focal loss
+        use_focal_loss=True,  # CAMBIO: pon True para usar focal loss
         use_mixup=False,       # CAMBIO: pon True para usar mixup
         use_cutmix=False,      # CAMBIO: pon True para usar cutmix (no implementado aquí)
         use_extra_aug=True,    # CAMBIO: pon False para solo augmentaciones básicas
-        scheduler_type="onecycle"  # CAMBIO: pon "cosine, cosineWarm, onecycle, stepLR" para CosineAnnealingLR
+        scheduler_type="cosineWarm"  # CAMBIO: pon "cosine, cosineWarm, onecycle, stepLR" para CosineAnnealingLR
     )
