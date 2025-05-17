@@ -685,7 +685,7 @@ def train_model(
                     _ , action_labels_a, action_labels_b, _ = mixup_data(batch_clips, action_labels)
                 # (Cutmix no implementado aquí por simplicidad, pero puedes añadirlo similar a mixup)
                                
-                with autocast():
+                with autocast(device):
                     foul_logits, action_logits = model(batch_clips)
                     if use_focal_loss:
                         foul_loss = FocalLoss()(foul_logits, foul_labels)
@@ -767,7 +767,7 @@ def train_model(
                 foul_labels = foul_labels.to(device, non_blocking=True)
                 action_labels = action_labels.to(device, non_blocking=True)
 
-                with autocast():
+                with autocast(device):
                     foul_logits, action_logits = model(batch_clips)
                     if use_focal_loss:
                         foul_loss = FocalLoss()(foul_logits, foul_labels)
