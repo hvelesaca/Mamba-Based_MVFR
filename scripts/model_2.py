@@ -16,7 +16,7 @@ class TemporalAttention(nn.Module):
         # x shape: [B, T, D]
         attn_output, _ = self.attention(x, x, x)
         attn_output = self.norm(attn_output + x)  # Residual connection
-        return attn_output.mean(dim=1)  # Pooling temporal ponderado
+        return attn_output.max(dim=1)  # Pooling temporal ponderado
         
 # =========================
 # Multi-Head Attention Layer
@@ -28,7 +28,7 @@ class MultiHeadAttention(nn.Module):
 
     def forward(self, x):
         attn_output, _ = self.attention(x, x, x)
-        return attn_output.mean(dim=1)
+        return attn_output.max(dim=1)
 
 # =========================
 # LiftingNet Mejorado con LayerNorm
@@ -128,7 +128,7 @@ class MultiTaskModelMamba(nn.Module):
             nn.Linear(self.feat_dim, self.feat_dim),
             nn.GELU(),
             nn.Dropout(dropout),
-            DropPath(drop_path_rate)
+            #DropPath(drop_path_rate)
         )
 
         self.foul_attention = MultiHeadAttention(self.feat_dim)
