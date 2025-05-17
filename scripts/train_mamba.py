@@ -166,6 +166,7 @@ class MVFoulDataset(Dataset):
                 action_path = os.path.join(self.folder_to_dir[folder], folder)
                 clips = torch.load(action_path, weights_only=False).float() / 255.0
 
+                """
                 num_available_clips = clips.shape[0]
                 if num_available_clips >= self.max_clips_per_video:
                     # Caso exacto: tomar todos los clips en orden
@@ -181,7 +182,12 @@ class MVFoulDataset(Dataset):
                         # Si solo hay un clip, repetir el primero
                         indices += [0] * (self.max_clips_per_video - num_available_clips)            
                 clips = clips[indices]
-
+                """
+                # Apply same processing as in preload
+                if clips.shape[0] > self.max_clips_per_video:
+                    indices = [0] + list(torch.randperm(clips.shape[0]-1)[:self.max_clips_per_video-1].add(1).tolist())
+                    clips = clips[indices]
+                
                 # Downsample spatial dimensions if needed
                 if self.downsample_factor > 1:
                     _, C, T, H, W = clips.shape
@@ -220,6 +226,7 @@ class MVFoulDataset(Dataset):
             action_path = os.path.join(self.folder_to_dir[self.action_folders[actual_idx]], self.action_folders[actual_idx])
             clips = torch.load(action_path, weights_only=False).float() / 255.0
 
+            """
             num_available_clips = clips.shape[0]
             if num_available_clips >= self.max_clips_per_video:
                 # Caso exacto: tomar todos los clips en orden
@@ -236,7 +243,12 @@ class MVFoulDataset(Dataset):
                     indices += [0] * (self.max_clips_per_video - num_available_clips)            
             
             clips = clips[indices]
-
+            """
+            #Apply same processing as in preload
+            if clips.shape[0] > self.max_clips_per_video:
+                indices = [0] + list(torch.randperm(clips.shape[0]-1)[:self.max_clips_per_video-1].add(1).tolist())
+                clips = clips[indices]
+            
             if self.downsample_factor > 1:
                 _, C, T, H, W = clips.shape
                 new_H, new_W = H // self.downsample_factor, W // self.downsample_factor
