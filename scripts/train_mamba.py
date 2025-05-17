@@ -459,6 +459,166 @@ def custom_evaluate(predictions, groundtruth, task_name):
     else:  # Action
         num_classes = 8
         class_names = list(MVFoulDataset.action_map.keys())
+
+    true_counts = np.zeros(num_classes)
+    pred_correct = np.zeros(num_classes)
+    pred_counts = np.zeros(num_classes)  # Contador de predicciones por clase
+
+    # Mapeo de acciones a sus índices de clase para el caso de Action
+    action_to_idx = {action: idx for idx, action in enumerate(MVFoulDataset.action_map.keys())} if task_name == "Action" else {}
+
+    # Primero, contamos todas las predicciones por clase
+    for action_id in predictions["Actions"]:
+        if task_name == "Foul":
+            pred_offence = predictions["Actions"][action_id]["Offence"]
+            pred_severity = predictions["Actions"][action_id]["Severity"]
+
+            if pred_offence == "No offence":
+                pred_idx = 0
+            elif pred_offence == "Offence":
+                if pred_severity == "1":
+                    pred_idx = 1
+                elif pred_severity == "3":
+                    pred_idx = 2
+                elif pred_severity == "5":
+                    pred_idx = 3
+                else:
+                    continue
+            else:
+                continue
+
+            pred_counts[pred_idx] += 1
+        else:  # Action
+            pred_action = predictions["Actions"][action_id]["Action class"]
+            if pred_action in action_to_idx:
+                pred_idx = action_to_idx[pred_action]
+                pred_counts[pred_idx] += 1
+
+    # Ahora procesamos las etiquetas verdaderas y contamos las predicciones correctas
+    for action_id in groundtruth["Actions"]:
+        true_action = groundtruth["Actions"][action_id]["Action class"]
+        if task_name == "Foul":
+            true_offence = groundtruth["Actions"][action_id]["Offence"]
+            true_severity = groundtruth["Actions"][action_id]["Severity"]
+            if true_offence == "No offence":
+                true_idx = 0
+            elif true_offence == "Offence":
+                if true_severity == "1":
+                    true_idx = 1
+                elif true_severity == "3":
+                    true_idx = 2
+                elif true_severity == "5":
+                    true_idx = 3
+                else:
+                    continue
+            else:
+                continue
+            true_counts[true_idx] += 1
+        else:
+            if true_action in action_to_idx:
+                true_idx = action_to_idx[true_action]
+                true_counts[true_idx] += 1
+            else:
+                continue
+
+        if action_id in predictions["Actions"]:
+            if task_name == "Foul":
+                pred_offence = predictions["Actions"][action_id]["Offence"]
+                pred_severity = predictions["Actions"][action_id]["Severity"]
+                if pred_offence == true_offence and pred_severity == true_severity:
+                    pred_correct[true_idx] += 1
+            else:
+                pred_action = predictions["Actions"][action_id]["Action class"]
+                if pred_action == true_action:
+                    pred_correct[true_idx] += 1
+
+    accuracy = sum(pred_correct) / sum(true_counts) if sum(true_counts) > 0 else 0.0
+    per_class_acc = {}
+    for i, name in enumerate(class_names):
+        per_class_acc[name] = pred_correct[i] / true_counts[i] if true_counts[i] > 0 else 0.0
+    ba = np.mean([pred_correct[i] / true_counts[i] if true_counts[i] > 0 else 0.0 for i in range(num_classes)])
+
+    # Crear matriz de confusión
+    confusion_matrix = np.zeros((num_classes, num_classes), dtype=int)
+    for action_id in groundtruth["Actions"]:
+        if action_id not in predictions["Actions"]:
+            continue
+
+        if task_name == "Foul":
+            true_offence = groundtruth["Actions"][action_id]["Offence"]
+            true_severity = groundtruth["Actions"][action_id]["Severity"]
+            pred_offence = predictions["Actions"][action_id]["Offence"]
+            pred_severity = predictions["Actions"][action_id]["Severity"]
+
+            # Determinar índices
+            if true_offence == "No offence":
+                true_idx = 0
+            elif true_offence == "Offence":
+                if true_severity == "1":
+                    true_idx = 1
+                elif true_severity == "3":
+                    true_idx = 2
+                elif true_severity == "5":
+                    true_idx = 3
+                else:
+                    continue
+            else:
+                continue
+
+            if pred_offence == "No offence":
+                pred_idx = 0
+            elif pred_offence == "Offence":
+                if pred_severity == "1":
+                    pred_idx = 1
+                elif pred_severity == "3":
+                    pred_idx = 2
+                elif pred_severity == "5":
+                    pred_idx = 3
+                else:
+                    continue
+            else:
+                continue
+
+            confusion_matrix[true_idx, pred_idx] += 1
+        else:  # Action
+            true_action = groundtruth["Actions"][action_id]["Action class"]
+            pred_action = predictions["Actions"][action_id]["Action class"]
+
+            if true_action in action_to_idx and pred_action in action_to_idx:
+                true_idx = action_to_idx[true_action]
+                pred_idx = action_to_idx[pred_action]
+                confusion_matrix[true_idx, pred_idx] += 1
+
+    result = {
+        "true_counts": true_counts,
+        "pred_counts": pred_counts,
+        "correct_counts": pred_correct,
+        "confusion_matrix": confusion_matrix,
+        "class_names": class_names
+    }
+
+    if task_name == "Foul":
+        result.update({
+            "accuracy_offence_severity": accuracy * 100,
+            "balanced_accuracy_offence_severity": ba * 100,
+            "per_class_offence": per_class_acc
+        })
+    else:
+        result.update({
+            "accuracy_action": accuracy * 100,
+            "balanced_accuracy_action": ba * 100,
+            "per_class_action": per_class_acc
+        })
+
+    return result
+    
+def custom_evaluate2(predictions, groundtruth, task_name):
+    if task_name == "Foul":
+        num_classes = 4
+        class_names = ["No offence", "Offence Severity 1", "Offence Severity 3", "Offence Severity 5"]
+    else:  # Action
+        num_classes = 8
+        class_names = list(MVFoulDataset.action_map.keys())
     
     true_counts = np.zeros(num_classes)
     pred_correct = np.zeros(num_classes)
@@ -779,6 +939,20 @@ def train_model(
         foul_results = custom_evaluate(val_pred_json, val_gt_foul_json, "Foul")
         action_results = custom_evaluate(val_pred_json, val_gt_action_json, "Action")
 
+        print("Foul results")
+        print(f"class_names: {foul_results["class_names"]}")
+        print(f"true_counts: {foul_results["true_counts"]}")
+        print(f"pred_counts: {foul_results["pred_counts"]}")
+        print(f"correct_counts: {foul_results["correct_counts"]}")
+        print(f"confusion_matrix: {foul_results["confusion_matrix"]}")
+
+        print("Action results")
+        print(f"class_names: {action_results["class_names"]}")
+        print(f"true_counts: {action_results["true_counts"]}")
+        print(f"pred_counts: {action_results["pred_counts"]}")
+        print(f"correct_counts: {action_results["correct_counts"]}")
+        print(f"confusion_matrix: {action_results["confusion_matrix"]}")
+
         sn_foul_acc = foul_results["accuracy_offence_severity"]
         sn_foul_ba = foul_results["balanced_accuracy_offence_severity"]
         sn_foul_per_class = foul_results["per_class_offence"]
@@ -793,12 +967,15 @@ def train_model(
               f"Val Foul Loss: {val_foul_loss:.4f}, Val Action Loss: {val_action_loss:.4f}, "
               f"Val Foul Acc: {val_foul_acc:.4f}, Val Action Acc: {val_action_acc:.4f}, "
               f"Val Foul BA: {val_foul_ba:.4f}, Val Action BA: {val_action_ba:.4f}")
+        
         print(f"SoccerNet Foul Metrics - Val Acc: {sn_foul_acc:.4f}, Val BA: {sn_foul_ba:.4f}, Per-Class Acc: {sn_foul_per_class}")
         print(f"SoccerNet Action Metrics - Val Acc: {sn_action_acc:.4f}, Val BA: {sn_action_ba:.4f}, Per-Class Acc: {sn_action_per_class}")
+        
         print(f"Train Foul true distribution: {train_foul_true_counts}")
         print(f"Train Foul pred distribution: {train_foul_pred_counts}")
         print(f"Train Action true distribution: {train_action_true_counts}")
         print(f"Train Action pred distribution: {train_action_pred_counts}")
+
         print(f"Val Foul true distribution: {val_foul_true_counts}")
         print(f"Val Foul pred distribution: {val_foul_pred_counts}")
         print(f"Val Action true distribution: {val_action_true_counts}")
