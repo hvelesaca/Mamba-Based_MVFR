@@ -13,7 +13,7 @@ from torch.utils.data import WeightedRandomSampler
 
 # CAMBIO: Importar augmentaciones adicionales y focal loss
 from torchvision.transforms import RandomErasing
-from torch.cuda.amp import autocast, GradScaler
+from torch.amp import autocast, GradScaler
 
 
 class WeightedFocalLoss(nn.Module):
@@ -609,7 +609,7 @@ def train_model(
     #optimizer = optim.AdamW(model.parameters(), lr=1e-4, betas=(0.9, 0.999), eps=1e-07, weight_decay=1e-2, amsgrad=False)
     #optimizer = optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-2)
         
-    optimizer = torch.optim.AdamW(model.parameters(), lr=5e-4, weight_decay=1e-2)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-2)
 
     if scheduler_type == "cosineWarm":
         # Scheduler con CosineAnnealingWarmRestarts
@@ -941,5 +941,5 @@ if __name__ == "__main__":
         use_mixup=False,       # CAMBIO: pon True para usar mixup
         use_cutmix=False,      # CAMBIO: pon True para usar cutmix (no implementado aquí)
         use_extra_aug=True,    # CAMBIO: pon False para solo augmentaciones básicas
-        scheduler_type="cosineWarm"  # CAMBIO: pon "cosine, cosineWarm, onecycle, stepLR" para CosineAnnealingLR
+        scheduler_type="onecycle"  # CAMBIO: pon "cosine, cosineWarm, onecycle, stepLR" para CosineAnnealingLR
     )
