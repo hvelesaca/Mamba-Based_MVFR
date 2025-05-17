@@ -921,8 +921,8 @@ if __name__ == "__main__":
     print("\nTraining MultiTaskMamba Model...")
     multitask_model = MultiTaskModelMamba()
     # CAMBIO: Aumentar label smoothing a 0.1
-    foul_criterion = nn.CrossEntropyLoss(weight=foul_weights.to(device), label_smoothing=0.025)
-    action_criterion = nn.CrossEntropyLoss(weight=action_weights.to(device), label_smoothing=0.025)
+    foul_criterion = nn.CrossEntropyLoss(weight=foul_weights.to(device), label_smoothing=0.05)
+    action_criterion = nn.CrossEntropyLoss(weight=action_weights.to(device), label_smoothing=0.05)
 
     # Crear criterios con Focal Loss ponderado
     #foul_criterion = WeightedFocalLoss(alpha=foul_weights.to(device), gamma=3.0)
