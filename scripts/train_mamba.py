@@ -16,7 +16,7 @@ from torchvision.transforms import RandomErasing
 from torch.amp import autocast, GradScaler
 
 class FocalLossWeight(nn.Module):
-    def __init__(self, alpha=1, gamma=2, reduction='mean', weight=None):
+    def __init__(self, weight=None, alpha=1, gamma=2, reduction='mean'):
         super().__init__()
         self.alpha = alpha
         self.gamma = gamma
