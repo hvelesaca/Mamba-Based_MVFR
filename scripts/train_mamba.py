@@ -691,8 +691,8 @@ def compute_balanced_accuracy(true_labels, pred_labels, num_classes):
 # CAMBIO: Añadir más augmentations y opción de mixup/cutmix
 def get_augmentations(device, use_extra_aug=True):
     aug_list = [
-        K.RandomHorizontalFlip(p=0.5),
-        K.RandomAffine(degrees=15, translate=(0.1, 0.1), scale=(0.8, 1.2)),
+        K.RandomHorizontalFlip(p=0.8),
+        K.RandomAffine(degrees=15, translate=(0.1, 0.1), scale=(1.25, 1.5, 1.75)),
         K.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1, p=0.5)
     ]
     if use_extra_aug:
@@ -1074,8 +1074,6 @@ if __name__ == "__main__":
         use_focal_loss=True,  # CAMBIO: pon True para usar focal loss
         use_mixup=False,       # CAMBIO: pon True para usar mixup
         use_cutmix=False,      # CAMBIO: pon True para usar cutmix (no implementado aquí)
-        use_extra_aug=True,    # CAMBIO: pon False para solo augmentaciones básicas
-        scheduler_type="cosineWarm",  # CAMBIO: pon "cosine, cosineWarm, onecycle, stepLR" para CosineAnnealingLR
-        foul_weights = foul_weights.to(device),
-        action_weights = action_weights.to(device)
+        use_extra_aug=False,    # CAMBIO: pon False para solo augmentaciones básicas
+        scheduler_type="cosineWarm"  # CAMBIO: pon "cosine, cosineWarm, onecycle, stepLR" para CosineAnnealingLR
     )
