@@ -16,40 +16,52 @@ from torchvision.transforms import RandomErasing
 from torch.cuda.amp import autocast, GradScaler
 
 
-class ClassBalancedFocalLoss(nn.Module):
-    def __init__(self, samples_per_cls, beta=0.9999, gamma=2.0):
-        super().__init__()
-        effective_num = 1.0 - np.power(beta, samples_per_cls)
-        weights = (1.0 - beta) / effective_num
-        weights = weights / np.sum(weights) * len(samples_per_cls)
-        self.weights = torch.tensor(weights).float()
-        self.gamma = gamma
+class WeightedFocalLoss(nn.Module):
+    def __init__(self, alpha=None, gamma=2.0, reduction='mean'):
+        """
+        Weighted Focal Loss
 
-    def forward(self, logits, labels):
-        weights = self.weights.to(logits.device)
-        ce_loss = F.cross_entropy(logits, labels, reduction='none', weight=weights)
-        pt = torch.exp(-ce_loss)
-        focal_loss = ((1 - pt) ** self.gamma) * ce_loss
-        return focal_loss.mean()
-        
-# CAMBIO: Focal Loss (implementación simple)
-class FocalLoss(nn.Module):
-    def __init__(self, alpha=1, gamma=2, reduction='mean'):
-        super().__init__()
+        Args:
+            alpha: Tensor de pesos por clase. Shape [C]
+            gamma: Factor de enfoque (2.0 por defecto)
+            reduction: 'mean', 'sum' o 'none'
+        """
+        super(WeightedFocalLoss, self).__init__()
         self.alpha = alpha
         self.gamma = gamma
         self.reduction = reduction
 
     def forward(self, inputs, targets):
-        ce_loss = F.cross_entropy(inputs, targets, reduction='none')
-        pt = torch.exp(-ce_loss)
-        focal_loss = self.alpha * (1 - pt) ** self.gamma * ce_loss
+        """
+        Args:
+            inputs: Tensor de logits. Shape [B, C]
+            targets: Tensor de etiquetas. Shape [B]
+        """
+        log_softmax = F.log_softmax(inputs, dim=1)
+
+        # Obtener probabilidad de la clase correcta
+        targets_one_hot = F.one_hot(targets, num_classes=inputs.size(1)).float()
+        probs = torch.exp(log_softmax)
+        pt = (targets_one_hot * probs).sum(1)
+
+        # Calcular factor focal (1-pt)^gamma
+        focal_weight = (1 - pt).pow(self.gamma)
+
+        # Aplicar pesos de clase si están disponibles
+        if self.alpha is not None:
+            alpha_t = self.alpha.gather(0, targets)
+            focal_weight = focal_weight * alpha_t
+
+        # Calcular pérdida
+        loss = -focal_weight * log_softmax.gather(1, targets.unsqueeze(1)).squeeze()
+
+        # Aplicar reducción
         if self.reduction == 'mean':
-            return focal_loss.mean()
+            return loss.mean()
         elif self.reduction == 'sum':
-            return focal_loss.sum()
+            return loss.sum()
         else:
-            return focal_loss
+            return loss
 
 # CAMBIO: Mixup y Cutmix helpers
 def mixup_data(x, y, alpha=0.4):
@@ -874,8 +886,13 @@ if __name__ == "__main__":
     print("\nTraining MultiTaskMamba Model...")
     multitask_model = MultiTaskModelMamba()
     # CAMBIO: Aumentar label smoothing a 0.1
-    foul_criterion = nn.CrossEntropyLoss(weight=foul_weights.to(device), label_smoothing=0.025)
-    action_criterion = nn.CrossEntropyLoss(weight=action_weights.to(device), label_smoothing=0.025)
+    #foul_criterion = nn.CrossEntropyLoss(weight=foul_weights.to(device), label_smoothing=0.025)
+    #action_criterion = nn.CrossEntropyLoss(weight=action_weights.to(device), label_smoothing=0.025)
+
+    # Crear criterios con Focal Loss ponderado
+    foul_criterion = WeightedFocalLoss(alpha=foul_weights.to(device), gamma=3.0)
+    action_criterion = WeightedFocalLoss(alpha=action_weights.to(device), gamma=3.0)
+
     # CAMBIO: Puedes activar focal loss, mixup, cutmix, augment extra y scheduler cosine aquí:
 
     print("Foul weights:", foul_weights)
