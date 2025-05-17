@@ -306,7 +306,7 @@ def custom_collate(batch):
     action_ids = [item[3] for item in batch]
     return clips, foul_labels, action_labels, action_ids
     
-def compute_class_weights(json_paths, foul_map, action_map):
+def compute_class_weights2(json_paths, foul_map, action_map):
     metadata = {}
     for json_path in json_paths if isinstance(json_paths, list) else [json_paths]:
         with open(json_path, 'r') as f:
@@ -363,7 +363,7 @@ def compute_class_weights(json_paths, foul_map, action_map):
     action_weights = action_weights / action_weights.sum()
     return foul_weights, action_weights, foul_counts, action_counts
     
-def compute_class_weightsAnt(json_paths, foul_map, action_map):
+def compute_class_weights(json_paths, foul_map, action_map):
     metadata = {}
     for json_path in json_paths if isinstance(json_paths, list) else [json_paths]:
         with open(json_path, 'r') as f:
@@ -921,12 +921,12 @@ if __name__ == "__main__":
     print("\nTraining MultiTaskMamba Model...")
     multitask_model = MultiTaskModelMamba()
     # CAMBIO: Aumentar label smoothing a 0.1
-    #foul_criterion = nn.CrossEntropyLoss(weight=foul_weights.to(device), label_smoothing=0.025)
-    #action_criterion = nn.CrossEntropyLoss(weight=action_weights.to(device), label_smoothing=0.025)
+    foul_criterion = nn.CrossEntropyLoss(weight=foul_weights.to(device), label_smoothing=0.025)
+    action_criterion = nn.CrossEntropyLoss(weight=action_weights.to(device), label_smoothing=0.025)
 
     # Crear criterios con Focal Loss ponderado
-    foul_criterion = WeightedFocalLoss(alpha=foul_weights.to(device), gamma=3.0)
-    action_criterion = WeightedFocalLoss(alpha=action_weights.to(device), gamma=3.0)
+    #foul_criterion = WeightedFocalLoss(alpha=foul_weights.to(device), gamma=3.0)
+    #action_criterion = WeightedFocalLoss(alpha=action_weights.to(device), gamma=3.0)
 
     # CAMBIO: Puedes activar focal loss, mixup, cutmix, augment extra y scheduler cosine aquí:
 
