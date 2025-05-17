@@ -78,7 +78,28 @@ class ClassBalancedFocalLoss(nn.Module):
         pt = torch.exp(-ce_loss)
         focal_loss = ((1 - pt) ** self.gamma) * ce_loss
         return focal_loss.mean()
-        
+
+class FocalLossWeight(nn.Module):
+    def __init__(self, alpha=1, gamma=2, reduction='mean', weight=None):
+        super().__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+        self.reduction = reduction
+        self.weight = weight  # Tensor de pesos por clase
+
+    def forward(self, inputs, targets):
+        # Usar los pesos de clase en cross_entropy
+        ce_loss = F.cross_entropy(inputs, targets, reduction='none', weight=self.weight)
+        pt = torch.exp(-ce_loss)
+        focal_loss = self.alpha * (1 - pt) ** self.gamma * ce_loss
+
+        if self.reduction == 'mean':
+            return focal_loss.mean()
+        elif self.reduction == 'sum':
+            return focal_loss.sum()
+        else:
+            return focal_loss
+            
 # CAMBIO: Focal Loss (implementación simple)
 class FocalLoss(nn.Module):
     def __init__(self, alpha=1, gamma=2, reduction='mean'):
@@ -589,7 +610,7 @@ def train_model(
     model, train_loader, val_loader, foul_criterion, action_criterion,
     num_epochs=100, device="cuda:0",
     use_focal_loss=False, use_mixup=False, use_cutmix=False, use_extra_aug=True,
-    scheduler_type="onecycle"):
+    scheduler_type="onecycle", foul_weights, action_weights):
 
     if torch.cuda.device_count() > 1:
         print("Usando", torch.cuda.device_count(), "GPUs")
@@ -688,8 +709,8 @@ def train_model(
                 with autocast(device):
                     foul_logits, action_logits = model(batch_clips)
                     if use_focal_loss:
-                        foul_loss = FocalLoss()(foul_logits, foul_labels)
-                        action_loss = FocalLoss()(action_logits, action_labels)
+                        foul_loss = FocalLossWeight(foul_weights)(foul_logits, foul_labels)
+                        action_loss = FocalLossWeight(action_weights)(action_logits, action_labels)
                     elif use_mixup:
                         foul_loss = mixup_criterion(foul_criterion, foul_logits, foul_labels_a, foul_labels_b, lam)
                         action_loss = mixup_criterion(action_criterion, action_logits, action_labels_a, action_labels_b, lam)
@@ -770,8 +791,8 @@ def train_model(
                 with autocast(device):
                     foul_logits, action_logits = model(batch_clips)
                     if use_focal_loss:
-                        foul_loss = FocalLoss()(foul_logits, foul_labels)
-                        action_loss = FocalLoss()(action_logits, action_labels)
+                        foul_loss = FocalLossWeight(foul_weights)(foul_logits, foul_labels)
+                        action_loss = FocalLossWeight(action_weights)(action_logits, action_labels)
                     else:
                         foul_loss = foul_criterion(foul_logits, foul_labels)
                         action_loss = action_criterion(action_logits, action_labels)
@@ -941,5 +962,7 @@ if __name__ == "__main__":
         use_mixup=False,       # CAMBIO: pon True para usar mixup
         use_cutmix=False,      # CAMBIO: pon True para usar cutmix (no implementado aquí)
         use_extra_aug=True,    # CAMBIO: pon False para solo augmentaciones básicas
-        scheduler_type="cosineWarm"  # CAMBIO: pon "cosine, cosineWarm, onecycle, stepLR" para CosineAnnealingLR
+        scheduler_type="cosineWarm",  # CAMBIO: pon "cosine, cosineWarm, onecycle, stepLR" para CosineAnnealingLR
+        foul_weights.to(device),
+        action_weights.to(device)
     )
