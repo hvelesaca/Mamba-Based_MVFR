@@ -704,7 +704,7 @@ def compute_balanced_accuracy(true_labels, pred_labels, num_classes):
 def get_augmentations(device, use_extra_aug=True):
     aug_list = [
         K.RandomHorizontalFlip(p=0.8),
-        K.RandomAffine(degrees=15, translate=(0.1, 0.1), scale=(1.5, 1.75)),
+        K.RandomAffine(degrees=15, translate=(0.1, 0.1), scale=(1.25, 1.5, 1.75, 2.0)),
         K.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1, p=0.5)
     ]
     if use_extra_aug:
