@@ -38,7 +38,7 @@ class FocalLossWeight(nn.Module):
             
 # CAMBIO: Focal Loss (implementación simple)
 class FocalLoss(nn.Module):
-    def __init__(self, alpha=1, gamma=2, reduction='mean'):
+    def __init__(self, alpha=1, gamma=3, reduction='mean'):
         super().__init__()
         self.alpha = alpha
         self.gamma = gamma
