@@ -211,7 +211,7 @@ class MVFoulDataset(Dataset):
             for i in range(len(self.action_folders)):
                 action_factor = 1 if self.action_labels[i] not in [5, 6, 7] else (3 if self.action_labels[i] == 5 else 2)
                 foul_factor = 5 if self.foul_labels[i] in [0, 3] else (2 if self.foul_labels[i] == 2 else 1)
-                factor = min(max(action_factor, foul_factor), 10)
+                factor = min(max(action_factor, foul_factor), 50)
                 indices.extend([i] * factor)
             self.indices = indices
             print(f"Number of samples after oversampling: {len(self.indices)}")
@@ -1022,7 +1022,7 @@ if __name__ == "__main__":
         split='train',
         curriculum=True,
         preload=True,
-        downsample_factor=1,
+        downsample_factor=2,
         max_clips_per_video=2
     )
 
@@ -1031,7 +1031,7 @@ if __name__ == "__main__":
         "/kaggle/input/datasetmvfd/datasetMVFD/test_preprocessed/annotations.json",
         split='val',
         preload=True,
-        downsample_factor=1,
+        downsample_factor=2,
         max_clips_per_video=2
     )
 
