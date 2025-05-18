@@ -169,12 +169,12 @@ class MVFoulDataset(Dataset):
                 num_available_clips = clips.shape[0]
                 if num_available_clips == self.max_clips_per_video:
                     # Caso exacto: tomar todos los clips en orden
-                    indices = list(range(self.max_clips_per_video))
-                    #indices = [1 1]
+                    #indices = list(range(self.max_clips_per_video))
+                    indices = [1 1]
                 if num_available_clips > self.max_clips_per_video:
                     # Caso exacto: tomar todos los clips en orden
-                    indices = list(range(self.max_clips_per_video))
-                    #indices = [1 2]
+                    #indices = list(range(self.max_clips_per_video))
+                    indices = [1 2]
                 else:
                     # Caso menos clips disponibles: tomar todos y completar repitiendo aleatoriamente (sin incluir el primero)
                     indices = list(range(num_available_clips))
@@ -234,12 +234,12 @@ class MVFoulDataset(Dataset):
             num_available_clips = clips.shape[0]
             if num_available_clips == self.max_clips_per_video:
                 # Caso exacto: tomar todos los clips en orden
-                indices = list(range(self.max_clips_per_video))
-                #indices = [1 1]
+                #indices = list(range(self.max_clips_per_video))
+                indices = [1 1]
             if num_available_clips > self.max_clips_per_video:
                 # Caso exacto: tomar todos los clips en orden
-                indices = list(range(self.max_clips_per_video))
-                #indices = [1 2]
+                #indices = list(range(self.max_clips_per_video))
+                indices = [1 2]
             else:
                 # Caso menos clips disponibles: tomar todos y completar repitiendo aleatoriamente (sin incluir el primero)
                 indices = list(range(num_available_clips))
@@ -725,7 +725,7 @@ def get_augmentations(device, use_extra_aug=True):
 
 def train_model(
     model, train_loader, val_loader, foul_criterion, action_criterion,
-    num_epochs=30, device="cuda:0",
+    num_epochs=15, device="cuda:0",
     use_focal_loss=False, use_mixup=False, use_cutmix=False, use_extra_aug=True,
     scheduler_type="onecycle", foul_weights=None, action_weights=None):
 
@@ -770,7 +770,7 @@ def train_model(
         json.dump(val_gt_action_json, f)
         
     for epoch in range(num_epochs):     
-        #print("Unfreezing the backbone...")
+        """
         if hasattr(model, "module"):
             model.module.gradual_unfreeze(epoch, epochs_per_unfreeze=2)
         else:
@@ -780,6 +780,7 @@ def train_model(
         # Actualizar optimizador para incluir nuevos parámetros descongelados
         optimizer.param_groups = []
         optimizer.add_param_group({'params': filter(lambda p: p.requires_grad, model.parameters())})
+        """
         
         """
         if epoch == 3:
