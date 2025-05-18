@@ -775,7 +775,7 @@ def train_model(
             model.module.gradual_unfreeze(epoch, epochs_per_unfreeze=2)
         else:
             model.unfreeze_partial_backbone()
-            model.gradual_unfreeze(epoch, epochs_per_unfreeze=2)
+            model.gradual_unfreeze(epoch, epochs_per_unfreeze=3)
 
         # Actualizar optimizador para incluir nuevos parámetros descongelados
         optimizer.param_groups = []
