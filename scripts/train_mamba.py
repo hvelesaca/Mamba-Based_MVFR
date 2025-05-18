@@ -170,11 +170,11 @@ class MVFoulDataset(Dataset):
                 if num_available_clips == self.max_clips_per_video:
                     # Caso exacto: tomar todos los clips en orden
                     #indices = list(range(self.max_clips_per_video))
-                    indices = [1 1]
+                    indices = [1, 1]
                 if num_available_clips > self.max_clips_per_video:
                     # Caso exacto: tomar todos los clips en orden
                     #indices = list(range(self.max_clips_per_video))
-                    indices = [1 2]
+                    indices = [1, 2]
                 else:
                     # Caso menos clips disponibles: tomar todos y completar repitiendo aleatoriamente (sin incluir el primero)
                     indices = list(range(num_available_clips))
@@ -235,11 +235,11 @@ class MVFoulDataset(Dataset):
             if num_available_clips == self.max_clips_per_video:
                 # Caso exacto: tomar todos los clips en orden
                 #indices = list(range(self.max_clips_per_video))
-                indices = [1 1]
+                indices = [1, 1]
             if num_available_clips > self.max_clips_per_video:
                 # Caso exacto: tomar todos los clips en orden
                 #indices = list(range(self.max_clips_per_video))
-                indices = [1 2]
+                indices = [1, 2]
             else:
                 # Caso menos clips disponibles: tomar todos y completar repitiendo aleatoriamente (sin incluir el primero)
                 indices = list(range(num_available_clips))
