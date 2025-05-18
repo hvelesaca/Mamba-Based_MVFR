@@ -952,18 +952,12 @@ def train_model(
         action_results = custom_evaluate(val_pred_json, val_gt_action_json, "Action")
 
         print("Foul results")
-        print("class_names: ", foul_results["class_names"])
-        print("true_counts: ", foul_results["true_counts"])
-        print("pred_counts: ", foul_results["pred_counts"])
-        print("correct_counts: ", foul_results["correct_counts"])
-        print("confusion_matrix: ", foul_results["confusion_matrix"])
+        print("confusion_matrix: ")
+        print(foul_results["confusion_matrix"])
 
         print("Action results")
-        print("class_names: ", action_results["class_names"])
-        print("true_counts: ", action_results["true_counts"])
-        print("pred_counts: ", action_results["pred_counts"])
-        print("correct_counts: ", action_results["correct_counts"])
-        print("confusion_matrix: ", action_results["confusion_matrix"])
+        print("confusion_matrix: ")
+        print(action_results["confusion_matrix"])
 
         sn_foul_acc = foul_results["accuracy_offence_severity"]
         sn_foul_ba = foul_results["balanced_accuracy_offence_severity"]
