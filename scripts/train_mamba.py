@@ -167,9 +167,14 @@ class MVFoulDataset(Dataset):
                 clips = torch.load(action_path, weights_only=False).float() / 255.0
 
                 num_available_clips = clips.shape[0]
-                if num_available_clips >= self.max_clips_per_video:
+                if num_available_clips == self.max_clips_per_video:
                     # Caso exacto: tomar todos los clips en orden
-                    indices = list(range(self.max_clips_per_video))
+                    #indices = list(range(self.max_clips_per_video))
+                    indices = [1 1]
+                if num_available_clips > self.max_clips_per_video:
+                    # Caso exacto: tomar todos los clips en orden
+                    #indices = list(range(self.max_clips_per_video))
+                    indices = [1 2]
                 else:
                     # Caso menos clips disponibles: tomar todos y completar repitiendo aleatoriamente (sin incluir el primero)
                     indices = list(range(num_available_clips))
@@ -206,7 +211,7 @@ class MVFoulDataset(Dataset):
             for i in range(len(self.action_folders)):
                 action_factor = 1 if self.action_labels[i] not in [5, 6, 7] else (3 if self.action_labels[i] == 5 else 2)
                 foul_factor = 5 if self.foul_labels[i] in [0, 3] else (2 if self.foul_labels[i] == 2 else 1)
-                factor = min(max(action_factor, foul_factor), 50)
+                factor = min(max(action_factor, foul_factor), 10)
                 indices.extend([i] * factor)
             self.indices = indices
             print(f"Number of samples after oversampling: {len(self.indices)}")
@@ -227,9 +232,14 @@ class MVFoulDataset(Dataset):
             clips = torch.load(action_path, weights_only=False).float() / 255.0
 
             num_available_clips = clips.shape[0]
-            if num_available_clips >= self.max_clips_per_video:
+            if num_available_clips == self.max_clips_per_video:
                 # Caso exacto: tomar todos los clips en orden
-                indices = list(range(self.max_clips_per_video))
+                #indices = list(range(self.max_clips_per_video))
+                indices = [1 1]
+            if num_available_clips > self.max_clips_per_video:
+                # Caso exacto: tomar todos los clips en orden
+                #indices = list(range(self.max_clips_per_video))
+                indices = [1 2]
             else:
                 # Caso menos clips disponibles: tomar todos y completar repitiendo aleatoriamente (sin incluir el primero)
                 indices = list(range(num_available_clips))
@@ -240,7 +250,6 @@ class MVFoulDataset(Dataset):
                 else:
                     # Si solo hay un clip, repetir el primero
                     indices += [0] * (self.max_clips_per_video - num_available_clips)            
-            
             clips = clips[indices]
             """
             #Apply same processing as in preload
@@ -1013,7 +1022,7 @@ if __name__ == "__main__":
         split='train',
         curriculum=True,
         preload=True,
-        downsample_factor=2,
+        downsample_factor=1,
         max_clips_per_video=2
     )
 
@@ -1022,7 +1031,7 @@ if __name__ == "__main__":
         "/kaggle/input/datasetmvfd/datasetMVFD/test_preprocessed/annotations.json",
         split='val',
         preload=True,
-        downsample_factor=2,
+        downsample_factor=1,
         max_clips_per_video=2
     )
 
