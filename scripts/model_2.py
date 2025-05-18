@@ -180,7 +180,7 @@ class MultiTaskModelMamba(nn.Module):
         self.total_layers = len(list(self.backbone.children()))
         print("total_layers: ", self.total_layers)
         self.current_unfreeze = 0  # Cuántas capas están descongeladas
-        self.unfreeze_partial_backbone(layers_to_unfreeze=4)  # Inicialmente descongelar 2 capas
+        self.unfreeze_partial_backbone(layers_to_unfreeze=5)  # Inicialmente descongelar 2 capas
 
         in_features = self.backbone.head[1].in_features
         self.backbone.head[1] = nn.Linear(in_features, 512)
