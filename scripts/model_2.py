@@ -75,7 +75,7 @@ class ViewMambaAggregate(nn.Module):
         super().__init__()
         self.model = model
         self.mamba = Mamba(d_model=d_model, d_state=d_state, d_conv=d_conv, expand=expand)
-        self.lifting_net = nn.Sequential() #LiftingNet(d_model)
+        self.lifting_net = LiftingNet(d_model)
         self.use_attention = use_attention
         self.view_attention = MultiHeadAttention(d_model) if use_attention else None
         self.temporal_attention = TemporalAttention(d_model)
