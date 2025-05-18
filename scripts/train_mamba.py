@@ -728,16 +728,8 @@ def train_model(
 
     augment = get_augmentations(device, use_extra_aug=use_extra_aug) if "train" in train_loader.dataset.split else nn.Identity()
 
-    # Ejemplo de discriminative learning rates
-    #optimizer = torch.optim.AdamW([
-    #{'params': model.backbone.parameters(), 'lr': 1e-5},
-    #{'params': model.aggregation_model.parameters(), 'lr': 1e-4},
-    #{'params': model.foul_branch.parameters(), 'lr': 1e-4},
-    #{'params': model.action_branch.parameters(), 'lr': 1e-4},
-    #], weight_decay=1e-2)
     #optimizer = optim.AdamW(model.parameters(), lr=1e-4, betas=(0.9, 0.999), eps=1e-07, weight_decay=1e-2, amsgrad=False)
-    #optimizer = optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-2)
-        
+    #optimizer = optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-2)        
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-2)
 
     if scheduler_type == "cosineWarm":
@@ -768,7 +760,13 @@ def train_model(
     with open("val_gt_action.json", "w") as f:
         json.dump(val_gt_action_json, f)
         
-    for epoch in range(num_epochs):       
+    for epoch in range(num_epochs):      
+        model.gradual_unfreeze(epoch, epochs_per_unfreeze=2)
+
+        # Actualizar optimizador para incluir nuevos parámetros descongelados
+        optimizer.param_groups = []
+        optimizer.add_param_group({'params': filter(lambda p: p.requires_grad, model.parameters())})
+        
         """
         if epoch == 3:
             print("Unfreezing the backbone...")
