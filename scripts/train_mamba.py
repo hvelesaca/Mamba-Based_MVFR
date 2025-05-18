@@ -725,7 +725,7 @@ def get_augmentations(device, use_extra_aug=True):
 
 def train_model(
     model, train_loader, val_loader, foul_criterion, action_criterion,
-    num_epochs=25, device="cuda:0",
+    num_epochs=30, device="cuda:0",
     use_focal_loss=False, use_mixup=False, use_cutmix=False, use_extra_aug=True,
     scheduler_type="onecycle", foul_weights=None, action_weights=None):
 
@@ -769,8 +769,13 @@ def train_model(
     with open("val_gt_action.json", "w") as f:
         json.dump(val_gt_action_json, f)
         
-    for epoch in range(num_epochs):      
-        model.gradual_unfreeze(epoch, epochs_per_unfreeze=2)
+    for epoch in range(num_epochs):     
+        #print("Unfreezing the backbone...")
+        if hasattr(model, "module"):
+            model.module.gradual_unfreeze(epoch, epochs_per_unfreeze=2)
+        else:
+            model.unfreeze_partial_backbone()
+            model.gradual_unfreeze(epoch, epochs_per_unfreeze=2)
 
         # Actualizar optimizador para incluir nuevos parámetros descongelados
         optimizer.param_groups = []
