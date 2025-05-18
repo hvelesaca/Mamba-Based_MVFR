@@ -107,7 +107,7 @@ class ViewMambaAggregate(nn.Module):
 # =========================
 # Modelo Multi-tarea Mejorado
 # =========================
-class MultiTaskModelMamba(nn.Module):
+class MultiTaskModelMamba2(nn.Module):
     def __init__(self, dropout=0.5, drop_path_rate=0.1):
         super().__init__()
         self.backbone = video_models.mvit_v2_s(weights=video_models.MViT_V2_S_Weights.KINETICS400_V1)
@@ -173,6 +173,88 @@ class MultiTaskModelMamba(nn.Module):
 
         return foul_logits, action_logits
 
+class MultiTaskModelMamba(nn.Module):
+    def __init__(self, dropout=0.5, drop_path_rate=0.1):
+        super().__init__()
+        self.backbone = video_models.mvit_v2_s(weights=video_models.MViT_V2_S_Weights.KINETICS400_V1)
+        self.total_layers = len(list(self.backbone.children()))
+        self.current_unfreeze = 0  # Cuántas capas están descongeladas
+        self.unfreeze_partial_backbone(layers_to_unfreeze=2)  # Inicialmente descongelar 2 capas
+
+        in_features = self.backbone.head[1].in_features
+        self.backbone.head[1] = nn.Linear(in_features, 512)
+        self.feat_dim = 512
+
+        self.aggregation_model = ViewMambaAggregate(
+            model=self.backbone,
+            d_model=self.feat_dim,
+            use_attention=True
+        )
+
+        self.shared_inter = nn.Sequential(
+            nn.LayerNorm(self.feat_dim),
+            nn.Linear(self.feat_dim, self.feat_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            DropPath(drop_path_rate)
+        )
+
+        self.foul_attention = MultiHeadAttention(self.feat_dim)
+        self.action_attention = MultiHeadAttention(self.feat_dim)
+
+        self.foul_branch = nn.Sequential(
+            nn.LayerNorm(self.feat_dim),
+            nn.Linear(self.feat_dim, self.feat_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(self.feat_dim, 4)
+        )
+
+        self.action_branch = nn.Sequential(
+            nn.LayerNorm(self.feat_dim),
+            nn.Linear(self.feat_dim, self.feat_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(self.feat_dim, 8)
+        )
+
+    def unfreeze_partial_backbone(self, layers_to_unfreeze):
+        # Congelar todo primero
+        for param in self.backbone.parameters():
+            param.requires_grad = False
+
+        # Descongelar las últimas `layers_to_unfreeze` capas
+        layers = list(self.backbone.children())[-layers_to_unfreeze:]
+        for layer in layers:
+            for param in layer.parameters():
+                param.requires_grad = True
+
+        self.current_unfreeze = layers_to_unfreeze
+
+    def gradual_unfreeze(self, epoch, epochs_per_unfreeze=5):
+        # Cada `epochs_per_unfreeze` épocas, descongela una capa más
+        layers_to_unfreeze = min(self.total_layers, 2 + epoch // epochs_per_unfreeze)
+        if layers_to_unfreeze > self.current_unfreeze:
+            print(f"Descongelando {layers_to_unfreeze} capas del backbone en la época {epoch}")
+            self.unfreeze_partial_backbone(layers_to_unfreeze)
+
+    def forward(self, x):
+        batch_size, num_views, C, T, H, W = x.shape
+        x = x.view(batch_size * num_views * T, C, H, W)
+        x = F.interpolate(x, size=(224, 224), mode='bilinear', align_corners=False)
+        x = x.view(batch_size, num_views, C, T, 224, 224)
+
+        pooled_view, features = self.aggregation_model(x)
+        shared_features = self.shared_inter(pooled_view)
+
+        foul_features = self.foul_attention(features)
+        action_features = self.action_attention(features)
+
+        foul_logits = self.foul_branch(shared_features + foul_features)
+        action_logits = self.action_branch(shared_features + action_features)
+
+        return foul_logits, action_logits
+        
 # =========================
 # Ejemplo de Entrenamiento
 # =========================
