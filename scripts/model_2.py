@@ -111,7 +111,7 @@ class MultiTaskModelMamba2(nn.Module):
     def __init__(self, dropout=0.5, drop_path_rate=0.1):
         super().__init__()
         self.backbone = video_models.mvit_v2_s(weights=video_models.MViT_V2_S_Weights.KINETICS400_V1)
-        self.unfreeze_partial_backbone(layers_to_unfreeze=2)
+        self.unfreeze_partial_backbone(layers_to_unfreeze=4)
 
         in_features = self.backbone.head[1].in_features
         self.backbone.head[1] = nn.Linear(in_features, 512)
@@ -178,9 +178,8 @@ class MultiTaskModelMamba(nn.Module):
         super().__init__()
         self.backbone = video_models.mvit_v2_s(weights=video_models.MViT_V2_S_Weights.KINETICS400_V1)
         self.total_layers = len(list(self.backbone.children()))
-        print("total_layers: ", self.total_layers)
         self.current_unfreeze = 0  # Cuántas capas están descongeladas
-        self.unfreeze_partial_backbone(layers_to_unfreeze=5)  # Inicialmente descongelar 2 capas
+        self.unfreeze_partial_backbone(layers_to_unfreeze=2)  # Inicialmente descongelar 2 capas
 
         in_features = self.backbone.head[1].in_features
         self.backbone.head[1] = nn.Linear(in_features, 512)
