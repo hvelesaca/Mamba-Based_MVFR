@@ -46,30 +46,6 @@ class LiftingNet(nn.Module):
         x = self.norm(x)
         return x
 
-# =========================
-# ViewMambaAggregate Mejorado
-# =========================
-class ViewMambaAggregate2(nn.Module):
-    def __init__(self, model, d_model=512, d_state=16, d_conv=4, expand=2, use_attention=True):
-        super().__init__()
-        self.model = model
-        self.mamba = Mamba(d_model=d_model, d_state=d_state, d_conv=d_conv, expand=expand)
-        self.lifting_net = LiftingNet(d_model)
-        self.use_attention = use_attention
-        self.attention = MultiHeadAttention(d_model) if use_attention else None
-        self.norm = nn.LayerNorm(d_model)
-
-    def forward(self, mvimages):
-        B, V, C, T, H, W = mvimages.shape
-        batched = mvimages.view(B * V, C, T, H, W)
-        features = self.model(batched)
-        features = features.view(B, V, -1)
-        mamba_out = self.mamba(features)
-        mamba_out = self.lifting_net(mamba_out)
-        pooled_view = self.attention(mamba_out) if self.use_attention else mamba_out.mean(dim=1)
-        pooled_view = self.norm(pooled_view)
-        return pooled_view, mamba_out
-
 class ViewMambaAggregate(nn.Module):
     def __init__(self, model, d_model=512, d_state=16, d_conv=4, expand=2, use_attention=True):
         super().__init__()
