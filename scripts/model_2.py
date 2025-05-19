@@ -46,6 +46,30 @@ class LiftingNet(nn.Module):
         x = self.norm(x)
         return x
 
+# =========================
+# ViewMambaAggregate Mejorado
+# =========================
+class ViewMambaAggregate2(nn.Module):
+    def __init__(self, model, d_model=512, d_state=16, d_conv=4, expand=2, use_attention=True):
+        super().__init__()
+        self.model = model
+        self.mamba = Mamba(d_model=d_model, d_state=d_state, d_conv=d_conv, expand=expand)
+        self.lifting_net = LiftingNet(d_model)
+        self.use_attention = use_attention
+        self.attention = MultiHeadAttention(d_model) if use_attention else None
+        self.norm = nn.LayerNorm(d_model)
+
+    def forward(self, mvimages):
+        B, V, C, T, H, W = mvimages.shape
+        batched = mvimages.view(B * V, C, T, H, W)
+        features = self.model(batched)
+        features = features.view(B, V, -1)
+        mamba_out = self.mamba(features)
+        mamba_out = self.lifting_net(mamba_out)
+        pooled_view = self.attention(mamba_out) if self.use_attention else mamba_out.mean(dim=1)
+        pooled_view = self.norm(pooled_view)
+        return pooled_view, mamba_out
+
 class ViewMambaAggregate(nn.Module):
     def __init__(self, model, d_model=512, d_state=16, d_conv=4, expand=2, use_attention=True):
         super().__init__()
@@ -80,14 +104,13 @@ class ViewMambaAggregate(nn.Module):
 
         return pooled_view, mamba_out
         
-# =========================
-# Modelo Multi-tarea Mejorado
-# =========================
 class MultiTaskModelMamba(nn.Module):
     def __init__(self, dropout=0.5, drop_path_rate=0.1):
         super().__init__()
         self.backbone = video_models.mvit_v2_s(weights=video_models.MViT_V2_S_Weights.KINETICS400_V1)
-        self.unfreeze_partial_backbone(layers_to_unfreeze=4)
+        self.total_layers = len(list(self.backbone.children()))
+        self.current_unfreeze = 0  # Cuántas capas están descongeladas
+        self.unfreeze_partial_backbone(layers_to_unfreeze=2)  # Inicialmente descongelar 2 capas
 
         in_features = self.backbone.head[1].in_features
         self.backbone.head[1] = nn.Linear(in_features, 512)
@@ -126,11 +149,25 @@ class MultiTaskModelMamba(nn.Module):
             nn.Linear(self.feat_dim, 8)
         )
 
-    def unfreeze_partial_backbone(self, layers_to_unfreeze=2):
+    def unfreeze_partial_backbone(self, layers_to_unfreeze):
+        # Congelar todo primero
+        for param in self.backbone.parameters():
+            param.requires_grad = False
+
+        # Descongelar las últimas `layers_to_unfreeze` capas
         layers = list(self.backbone.children())[-layers_to_unfreeze:]
         for layer in layers:
             for param in layer.parameters():
                 param.requires_grad = True
+
+        self.current_unfreeze = layers_to_unfreeze
+
+    def gradual_unfreeze(self, epoch, epochs_per_unfreeze=5):
+        # Cada `epochs_per_unfreeze` épocas, descongela una capa más
+        layers_to_unfreeze = min(self.total_layers, 2 + epoch // epochs_per_unfreeze)
+        if layers_to_unfreeze > self.current_unfreeze:
+            print(f"Descongelando {layers_to_unfreeze} capas del backbone en la época {epoch}")
+            self.unfreeze_partial_backbone(layers_to_unfreeze)
 
     def forward(self, x):
         batch_size, num_views, C, T, H, W = x.shape
@@ -148,7 +185,7 @@ class MultiTaskModelMamba(nn.Module):
         action_logits = self.action_branch(shared_features + action_features)
 
         return foul_logits, action_logits
-
+        
 # =========================
 # Ejemplo de Entrenamiento
 # =========================
