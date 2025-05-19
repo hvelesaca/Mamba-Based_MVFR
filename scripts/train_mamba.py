@@ -770,6 +770,7 @@ def train_model(
         json.dump(val_gt_action_json, f)
         
     for epoch in range(num_epochs):     
+        """
         if hasattr(model, "module"):
             model.module.gradual_unfreeze(epoch, epochs_per_unfreeze=2)
         else:
@@ -779,7 +780,7 @@ def train_model(
         # Actualizar optimizador para incluir nuevos parámetros descongelados
         optimizer.param_groups = []
         optimizer.add_param_group({'params': filter(lambda p: p.requires_grad, model.parameters())})
-        
+        """
         """
         if epoch == 3:
             print("Unfreezing the backbone...")
