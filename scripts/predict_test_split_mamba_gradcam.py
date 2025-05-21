@@ -21,7 +21,214 @@ if torch.cuda.is_available():
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-class MVFoulTestDataset(Dataset):
+class MVFoulDataset(Dataset):
+    foul_map = {"No Offence": 0, "Offence Severity 1": 1, "Offence Severity 3": 2, "Offence Severity 5": 3}
+    action_map = {
+        "Standing Tackling": 0, "Tackling": 1, "Holding": 2, "Pushing": 3,
+        "Challenge": 4, "Dive": 5, "High Leg": 6, "Elbowing": 7
+    }
+
+    def __init__(self, data_dirs, json_paths, num_frames=16, split='train', curriculum=False, preload=False,
+                 downsample_factor=1, max_clips_per_video=2):
+        self.data_dirs = data_dirs if isinstance(data_dirs, list) else [data_dirs]
+        self.json_paths = json_paths if isinstance(json_paths, list) else [json_paths]
+        self.metadata = {}
+        for json_path in self.json_paths:
+            with open(json_path, 'r') as f:
+                data = json.load(f)
+                self.metadata.update(data["Actions"])
+        self.action_folders = []
+        for data_dir in self.data_dirs:
+            self.action_folders.extend([d for d in os.listdir(data_dir) if d.endswith(".pt")])
+        self.num_frames = num_frames
+        self.split = split
+        self.curriculum = curriculum
+        self.preload = preload
+        self.downsample_factor = downsample_factor
+        self.max_clips_per_video = max_clips_per_video
+        self.action_normalization = {
+            "standing tackle": "Standing Tackling", "tackle": "Tackling", "high leg": "High Leg",
+            "dont know": None, "": None, "challenge": "Challenge", "dive": "Dive",
+            "elbowing": "Elbowing", "holding": "Holding", "pushing": "Pushing", "high Leg": "High Leg"
+        }
+
+        self.valid_action_folders = []
+        self.foul_labels = []
+        self.action_labels = []
+        self.folder_to_dir = {}
+
+        for data_dir in self.data_dirs:
+            for folder in os.listdir(data_dir):
+                if not folder.endswith(".pt"):
+                    continue
+                action_id = folder.replace(".pt", "").replace("action_", "")
+                if action_id not in self.metadata:
+                    continue
+                offence = self.metadata[action_id]["Offence"].lower()
+                severity_str = self.metadata[action_id]["Severity"]
+                action_class = self.metadata[action_id]["Action class"].lower()
+
+                normalized_action = self.action_normalization.get(action_class, action_class.title())
+                if normalized_action is None or normalized_action not in self.action_map:
+                    continue
+
+                if (offence == '' or offence == 'between') and normalized_action != 'Dive':
+                    continue
+                if (severity_str == '' or severity_str == '2.0' or severity_str == '4.0') and \
+                   normalized_action != 'Dive' and offence != 'no offence':
+                    continue
+
+                if offence == '' or offence == 'between':
+                    offence = 'offence'
+                if severity_str == '' or severity_str == '2.0' or severity_str == '4.0':
+                    severity_str = '1.0'
+
+                if offence == 'no offence':
+                    foul_label = 0
+                elif offence == 'offence':
+                    severity = float(severity_str)
+                    if severity == 1.0:
+                        foul_label = 1
+                    elif severity == 3.0:
+                        foul_label = 2
+                    elif severity == 5.0:
+                        foul_label = 3
+                    else:
+                        continue
+                else:
+                    continue
+
+                action_label = self.action_map[normalized_action]
+
+                self.valid_action_folders.append(folder)
+                self.foul_labels.append(foul_label)
+                self.action_labels.append(action_label)
+                self.folder_to_dir[folder] = data_dir
+
+        self.action_folders = self.valid_action_folders
+
+        if self.preload:
+            print(f"Preloading {len(self.action_folders)} .pt files for {split} split...")
+            self.clips_cache = {}
+            
+            for folder in tqdm(self.action_folders, desc="Cargando clips"):
+                action_id = folder.replace(".pt", "").replace("action_", "")
+                action_path = os.path.join(self.folder_to_dir[folder], folder)
+                clips = torch.load(action_path, weights_only=False).float() / 255.0
+
+                num_available_clips = clips.shape[0]
+                if num_available_clips == self.max_clips_per_video:
+                    # Caso exacto: tomar todos los clips en orden
+                    indices = list(range(self.max_clips_per_video))
+                    #indices = [1, 1]
+                if num_available_clips > self.max_clips_per_video:
+                    # Caso exacto: tomar todos los clips en orden
+                    indices = list(range(self.max_clips_per_video))
+                    #indices = [1, 2]
+                else:
+                    # Caso menos clips disponibles: tomar todos y completar repitiendo aleatoriamente (sin incluir el primero)
+                    indices = list(range(num_available_clips))
+                    if num_available_clips > 1:
+                        extra_needed = self.max_clips_per_video - num_available_clips
+                        extra_indices = torch.randint(1, num_available_clips, (extra_needed,)).tolist()
+                        indices += extra_indices
+                    else:
+                        # Si solo hay un clip, repetir el primero
+                        indices += [0] * (self.max_clips_per_video - num_available_clips)            
+                clips = clips[indices]
+                """
+                # Apply same processing as in preload
+                if clips.shape[0] > self.max_clips_per_video:
+                    indices = [0] + list(torch.randperm(clips.shape[0]-1)[:self.max_clips_per_video-1].add(1).tolist())
+                    clips = clips[indices]
+                """
+                
+                # Downsample spatial dimensions if needed
+                if self.downsample_factor > 1:
+                    _, C, T, H, W = clips.shape
+                    new_H, new_W = H // self.downsample_factor, W // self.downsample_factor
+                    clips = F.interpolate(
+                        clips.reshape(-1, C, H, W),
+                        size=(new_H, new_W),
+                        mode='bilinear',
+                        align_corners=False
+                    ).reshape(-1, C, T, new_H, new_W)
+
+                self.clips_cache[action_id] = clips
+
+        if self.curriculum and self.split == 'train':
+            indices = []
+            for i in range(len(self.action_folders)):
+                action_factor = 1 if self.action_labels[i] not in [5, 6, 7] else (3 if self.action_labels[i] == 5 else 2)
+                foul_factor = 5 if self.foul_labels[i] in [0, 3] else (2 if self.foul_labels[i] == 2 else 1)
+                factor = min(max(action_factor, foul_factor), 50)
+                indices.extend([i] * factor)
+            self.indices = indices
+            print(f"Number of samples after oversampling: {len(self.indices)}")
+        else:
+            self.indices = list(range(len(self.action_folders)))
+            print(f"Number of samples: {len(self.indices)}")
+
+    def __len__(self):
+        return len(self.indices)
+
+    def __getitem__(self, idx):
+        actual_idx = self.indices[idx]
+        action_id = self.action_folders[actual_idx].replace(".pt", "").replace("action_", "")
+        if self.preload:
+            clips = self.clips_cache[action_id]
+        else:
+            action_path = os.path.join(self.folder_to_dir[self.action_folders[actual_idx]], self.action_folders[actual_idx])
+            clips = torch.load(action_path, weights_only=False).float() / 255.0
+
+            num_available_clips = clips.shape[0]
+            if num_available_clips == self.max_clips_per_video:
+                # Caso exacto: tomar todos los clips en orden
+                indices = list(range(self.max_clips_per_video))
+                #indices = [1, 1]
+            if num_available_clips > self.max_clips_per_video:
+                # Caso exacto: tomar todos los clips en orden
+                indices = list(range(self.max_clips_per_video))
+                #indices = [1, 2]
+            else:
+                # Caso menos clips disponibles: tomar todos y completar repitiendo aleatoriamente (sin incluir el primero)
+                indices = list(range(num_available_clips))
+                if num_available_clips > 1:
+                    extra_needed = self.max_clips_per_video - num_available_clips
+                    extra_indices = torch.randint(1, num_available_clips, (extra_needed,)).tolist()
+                    indices += extra_indices
+                else:
+                    # Si solo hay un clip, repetir el primero
+                    indices += [0] * (self.max_clips_per_video - num_available_clips)            
+            clips = clips[indices]
+            """
+            #Apply same processing as in preload
+            if clips.shape[0] > self.max_clips_per_video:
+                indices = [0] + list(torch.randperm(clips.shape[0]-1)[:self.max_clips_per_video-1].add(1).tolist())
+                clips = clips[indices]
+            """
+            
+            if self.downsample_factor > 1:
+                _, C, T, H, W = clips.shape
+                new_H, new_W = H // self.downsample_factor, W // self.downsample_factor
+                clips = F.interpolate(
+                    clips.reshape(-1, C, H, W),
+                    size=(new_H, new_W),
+                    mode='bilinear',
+                    align_corners=False
+                ).reshape(-1, C, T, new_H, new_W)
+
+        # Select clips as before
+        if clips.shape[0] == 1:
+            clips = torch.stack([clips[0], clips[0]])
+        else:
+            random_idx = torch.randint(1, clips.shape[0], (1,)).item()
+            clips = torch.stack([clips[0], clips[random_idx]])
+
+        return clips, torch.tensor(self.foul_labels[actual_idx]), torch.tensor(self.action_labels[actual_idx]), action_id
+
+
+class MVFoulTestDataset2(Dataset):
     foul_map = {
         "No Offence": 0,
         "Offence Severity 1": 1,
