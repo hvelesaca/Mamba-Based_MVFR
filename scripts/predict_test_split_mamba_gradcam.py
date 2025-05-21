@@ -570,7 +570,7 @@ def predict_test_split(model, test_loader, device="cuda" if torch.cuda.is_availa
     print(f"Total action IDs collected: {len(all_action_ids)}")
     
     # Randomly select 15 samples
-    num_samples_to_visualize = 8
+    num_samples_to_visualize = 9
     if len(all_action_ids) < num_samples_to_visualize:
         print(f"Warning: Only {len(all_action_ids)} samples available, visualizing all.")
         num_samples_to_visualize = len(all_action_ids)
@@ -614,7 +614,7 @@ if __name__ == "__main__":
     try:
         test_loader = DataLoader(
             test_dataset,
-            batch_size=4,
+            batch_size=1,
             shuffle=False,
             num_workers=4,
             pin_memory=True,
