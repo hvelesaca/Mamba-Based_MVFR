@@ -400,7 +400,13 @@ class GradCAM:
     
         # Usar x_flat para la inferencia
         foul_logits, action_logits = self.model(x)
-    
+
+        B_flat, C_act, T_act, H_act, W_act = self.activations.shape
+        print(f"Activations shape: {self.activations.shape}")
+        print(f"Gradients shape: {self.gradients.shape}")
+        print(f"Using T_act={T_act}, H_act={H_act}, W_act={W_act} for reshape")
+
+        
         # Reorganizar logits a [B, V, num_classes]
         foul_logits = foul_logits.view(B, V, -1).mean(dim=1)  # Promedio sobre vistas
         action_logits = action_logits.view(B, V, -1).mean(dim=1)
@@ -421,6 +427,7 @@ class GradCAM:
     
         # CAM tiene tamaño [B*V, T', H', W'], reorganizar a [B, V, T', H', W']
         cam = cam.view(B, V, T_act, H_act, W_act)
+        
         return cam, foul_logits, action_logits
         
     def __call__2(self, x, class_idx=None):
