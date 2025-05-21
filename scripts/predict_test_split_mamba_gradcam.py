@@ -447,8 +447,8 @@ def visualize_gradcam(model, clips, action_ids, num_samples=15, num_views=2, sav
         clips = clips.to(device, non_blocking=True).requires_grad_(True)
 
         # Resize clips to 224x224
-        resize = T.Resize((224, 224), antialias=True)
-        resized_clips = torch.zeros(clips.shape[0], clips.shape[1], clips.shape[2], clips.shape[3], 224, 224, 
+        resize = T.Resize((112, 112), antialias=True)
+        resized_clips = torch.zeros(clips.shape[0], clips.shape[1], clips.shape[2], clips.shape[3], 112, 112, 
                                   dtype=clips.dtype, device=device)
         for b in range(clips.shape[0]):
             for v in range(clips.shape[1]):
