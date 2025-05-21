@@ -391,8 +391,39 @@ class GradCAM:
     
     def save_gradients(self, module, grad_in, grad_out):
         self.gradients = grad_out[0]
-    
+
     def __call__(self, x, class_idx=None):
+        self.model.eval()
+        B, V, C, T, H, W = x.shape
+        x_flat = x.view(-1, C, T, H, W)  # [B*V, C, T, H, W]
+        print(f"GradCAM input shape (flattened): {x_flat.shape}")
+    
+        # Usar x_flat para la inferencia
+        foul_logits, action_logits = self.model(x_flat)
+    
+        # Reorganizar logits a [B, V, num_classes]
+        foul_logits = foul_logits.view(B, V, -1).mean(dim=1)  # Promedio sobre vistas
+        action_logits = action_logits.view(B, V, -1).mean(dim=1)
+    
+        if class_idx is None:
+            class_idx = torch.argmax(foul_logits, dim=1)
+    
+        self.model.zero_grad()
+        score = foul_logits[range(B), class_idx].sum()
+        score.backward()
+    
+        B_flat, C_act, T_act, H_act, W_act = self.activations.shape
+        weights = torch.mean(self.gradients, dim=[2, 3, 4], keepdim=True)
+        cam = torch.sum(weights * self.activations, dim=1)
+        cam = torch.relu(cam)
+        cam = cam - cam.min(dim=1, keepdim=True)[0]
+        cam = cam / (cam.max(dim=1, keepdim=True)[0] + 1e-8)
+    
+        # CAM tiene tamaño [B*V, T', H', W'], reorganizar a [B, V, T', H', W']
+        cam = cam.view(B, V, T_act, H_act, W_act)
+        return cam, foul_logits, action_logits
+        
+    def __call__2(self, x, class_idx=None):
         self.model.eval()
         B, V, C, T, H, W = x.shape
         x_flat = x.view(-1, C, T, H, W)  # [B*V, C, T, H, W]
