@@ -392,7 +392,7 @@ class GradCAM:
     def save_gradients(self, module, grad_in, grad_out):
         self.gradients = grad_out[0]
 
-    def __call__(self, x, class_idx=None):
+    def __call__2(self, x, class_idx=None):
         self.model.eval()
         B, V, C, T, H, W = x.shape
         x_flat = x.view(-1, C, T, H, W)  # [B*V, C, T, H, W]
@@ -429,7 +429,7 @@ class GradCAM:
         
         return cam, foul_logits, action_logits
           
-    def __call__2(self, x, class_idx=None):
+    def __call__(self, x, class_idx=None):
         self.model.eval()
         B, V, C, T, H, W = x.shape
         x_flat = x.view(-1, C, T, H, W)  # [B*V, C, T, H, W]
