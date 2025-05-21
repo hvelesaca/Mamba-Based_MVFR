@@ -1,7 +1,7 @@
 import os
 import torch
 from torch.utils.data import Dataset, DataLoader
-from model_2_v3 import MultiTaskModelMamba
+from model_2_v4 import MultiTaskModelMamba
 from tqdm import tqdm
 import json
 import datetime
@@ -621,7 +621,7 @@ if __name__ == "__main__":
         model = torch.nn.DataParallel(model)
     model = model.to(device)
     model_path = "/kaggle/input/mvfr-v4/pytorch/default/1/best_multitask_mamba_model_epoch5_ba31.2105.pth"
-    model.load_state_dict(torch.load(model_path, map_location=device, weights_only=False), strict=False)
+    model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True), strict=True)
     
 
     """
