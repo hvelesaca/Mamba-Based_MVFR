@@ -399,7 +399,7 @@ class GradCAM:
         print(f"GradCAM input shape (flattened): {x_flat.shape}")
     
         # Usar x_flat para la inferencia
-        foul_logits, action_logits = self.model(x_flat)
+        foul_logits, action_logits = self.model(x)
     
         # Reorganizar logits a [B, V, num_classes]
         foul_logits = foul_logits.view(B, V, -1).mean(dim=1)  # Promedio sobre vistas
