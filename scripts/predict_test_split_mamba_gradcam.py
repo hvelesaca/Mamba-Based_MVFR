@@ -617,7 +617,7 @@ if __name__ == "__main__":
     multitask_model = MultiTaskModelMamba().to(device)
     
     # Load model weights
-    model_path = "/kaggle/input/s-amba-v2/pytorch/default/1"
+    model_path = "/kaggle/input/mvfr-v2/pytorch/default/1/best_multitask_mamba_model_epoch6_ba31.8905.pth"
     multitask_model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
     
     print("Predicting on Test Split with Mamba Model...")
