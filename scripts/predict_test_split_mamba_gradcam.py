@@ -473,17 +473,21 @@ def visualize_gradcam(model, clips, action_ids, num_samples=15, num_views=2, sav
         clips = clips[:num_samples]
         action_ids = action_ids[:num_samples]
         print(f"Selected clips shape: {clips.shape}")
-        
+
+        device = next(model.parameters()).device
+        clips = clips.to(device, non_blocking=True).requires_grad_(True)
+
         # Resize clips to 224x224
         resize = T.Resize((224, 224), antialias=True)
         resized_clips = torch.zeros(clips.shape[0], clips.shape[1], clips.shape[2], clips.shape[3], 224, 224, 
-                                  dtype=clips.dtype, device=clips.device)
+                                  dtype=clips.dtype, device=device)
         for b in range(clips.shape[0]):
             for v in range(clips.shape[1]):
                 for t in range(clips.shape[3]):
                     frame = clips[b, v, :, t, :, :]  # [C, H, W]
                     resized_frame = resize(frame)  # [C, 224, 224]
                     resized_clips[b, v, :, t, :, :] = resized_frame
+        
         clips = resized_clips
         print(f"Resized clips shape: {clips.shape}")
         
@@ -652,9 +656,9 @@ if __name__ == "__main__":
     # Load the trained MultiTaskModel
     model = MultiTaskModelMamba() 
 
-    #if torch.cuda.device_count() > 1:
-    #    print("Usando", torch.cuda.device_count(), "GPUs")
-    #    model = torch.nn.DataParallel(model)
+    if torch.cuda.device_count() > 1:
+        print("Usando", torch.cuda.device_count(), "GPUs")
+        model = torch.nn.DataParallel(model)
     model = model.to(device)
     model_path = "/kaggle/input/mvfr-v4/pytorch/default/1/best_multitask_mamba_model_epoch5_ba31.2105.pth"
     model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True), strict=True)
