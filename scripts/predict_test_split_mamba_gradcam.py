@@ -397,9 +397,9 @@ class GradCAM:
         B, V, C, T, H, W = x.shape
         x_flat = x.view(-1, C, T, H, W)  # [B*V, C, T, H, W]
         print(f"GradCAM input shape: {x_flat.shape}")
-        
+        print("Aqi")
         foul_logits, action_logits = self.model(x)
-        
+        print("foul_logits: ", foul_logits)
         if class_idx is None:
             class_idx = torch.argmax(foul_logits, dim=1)
         
