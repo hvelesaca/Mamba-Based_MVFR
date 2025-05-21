@@ -1,7 +1,7 @@
 import os
 import torch
 from torch.utils.data import Dataset, DataLoader
-from model_2_v2 import MultiTaskModelMamba
+from model_2_v3 import MultiTaskModelMamba
 from tqdm import tqdm
 import json
 import datetime
@@ -617,7 +617,7 @@ if __name__ == "__main__":
     multitask_model = MultiTaskModelMamba().to(device)
     
     # Load model weights
-    model_path = "/kaggle/input/mvfr-v2/pytorch/default/1/best_multitask_mamba_model_epoch6_ba31.8905.pth"
+    model_path = "/kaggle/input/mvfr-v3/pytorch/default/1/best_multitask_mamba_model_epoch4_ba32.7700.pth"
     multitask_model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
     
     print("Predicting on Test Split with Mamba Model...")
