@@ -612,13 +612,25 @@ if __name__ == "__main__":
         print("- Increase file descriptor limit: 'ulimit -n 4096'.")
         print("- Run with num_workers=0 (already set).")
         exit(1)
+
+    """
+    # Load the trained MultiTaskModel
+    model = MultiTaskModelMamba() 
+
+    if torch.cuda.device_count() > 1:
+        print("Usando", torch.cuda.device_count(), "GPUs")
+        model = torch.nn.DataParallel(model)
+    model = model.to(device)
+
+    model.load_state_dict(torch.load(args.model_name, map_location=device), strict=False)
+    """
     
     # Initialize model
-    multitask_model = MultiTaskModelMamba().to(device)
+    model = MultiTaskModelMamba().to(device)
     
     # Load model weights
     model_path = "/kaggle/input/mvfr-v4/pytorch/default/1/best_multitask_mamba_model_epoch5_ba31.2105.pth"
-    multitask_model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
+    model.load_state_dict(torch.load(model_path, map_location=device), strict=False)
     
     print("Predicting on Test Split with Mamba Model...")
-    metrics = predict_test_split(multitask_model, test_loader, device)
+    metrics = predict_test_split(model, test_loader, device)
