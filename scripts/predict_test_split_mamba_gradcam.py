@@ -582,8 +582,8 @@ if __name__ == "__main__":
     
     # Initialize dataset and dataloader
     test_dataset = MVFoulTestDataset(
-        data_dir="/home/areyesan/soccerNet/dataset/test_preprocessed",
-        json_path="/home/areyesan/soccerNet/dataset/test/annotations.json",
+        data_dir="/kaggle/input/datasetmvfd/datasetMVFD/test_preprocessed",
+        json_path="/kaggle/input/datasetmvfd/datasetMVFD/test_preprocessed/annotations.json",
         split='test',
         preload=True
     )
