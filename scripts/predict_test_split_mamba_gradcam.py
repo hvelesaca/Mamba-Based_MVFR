@@ -425,11 +425,16 @@ def visualize_gradcam(model, clips, action_ids, num_samples=15, num_views=2, sav
         print(f"Input clips shape: {clips.shape}")
         os.makedirs(save_dir, exist_ok=True)
         print(f"Visualization directory: {save_dir}")
-        
+
+        if isinstance(model, torch.nn.DataParallel):
+            backbone = model.module.backbone
+        else:
+            backbone = model.backbone
+            
         # Check if conv_proj exists
-        if not hasattr(model.backbone, 'conv_proj'):
+        if not hasattr(backbone, 'conv_proj'):
             print("Error: 'conv_proj' not found in model.backbone. Available modules:")
-            for name, module in model.backbone.named_modules():
+            for name, module in backbone.named_modules():
                 print(f"  {name}: {module.__class__.__name__}")
             raise AttributeError("'conv_proj' not found in model.backbone")
         
@@ -455,7 +460,7 @@ def visualize_gradcam(model, clips, action_ids, num_samples=15, num_views=2, sav
         clips = clips.to(device, non_blocking=False).requires_grad_(True)
         print(f"Clips requires_grad: {clips.requires_grad}")
         
-        gradcam = GradCAM(model, model.backbone.conv_proj)  # Target MViT's conv_proj layer
+        gradcam = GradCAM(model, backbone.conv_proj)  # Target MViT's conv_proj layer
         
         cams, foul_logits, action_logits = gradcam(clips)
         print(f"Grad-CAM output shape: {cams.shape}")
