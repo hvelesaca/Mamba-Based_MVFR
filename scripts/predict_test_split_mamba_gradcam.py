@@ -475,8 +475,9 @@ def visualize_gradcam(model, clips, action_ids, num_samples=15, num_views=2, sav
         #clips = clips.to(device, non_blocking=False).requires_grad_(True)
         print(f"Clips requires_grad: {clips.requires_grad}")
         
-        gradcam = GradCAM(model, backbone.conv_proj)  # Target MViT's conv_proj layer
-        
+        #gradcam = GradCAM(model, backbone.conv_proj)  # Target MViT's conv_proj layer
+        gradcam = GradCAM(model, model.module.aggregation_model.norm)  # Target MViT's conv_proj layer
+                
         cams, foul_logits, action_logits = gradcam(clips)
         print(f"Grad-CAM output shape: {cams.shape}")
         
