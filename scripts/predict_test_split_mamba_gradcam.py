@@ -650,8 +650,11 @@ def visualize_gradcam(model, clips, action_ids, num_samples=15, num_views=2, sav
                     os.makedirs(image_dir, exist_ok=True)
 
                     # Guardar frame y overlay
+                    
                     frame_path = os.path.join(image_dir, "frame.png")
                     overlay_path = os.path.join(image_dir, "overlay.png")
+                    frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR) 
+                    overlay = cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR)
                     cv2.imwrite(frame_path, (frame * 255).astype(np.uint8))
                     cv2.imwrite(overlay_path, (overlay * 255).astype(np.uint8))
 
