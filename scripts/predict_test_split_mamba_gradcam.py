@@ -625,7 +625,7 @@ def visualize_gradcam(model, clips, action_ids, num_samples=15, num_views=2, sav
                     cam_resized[t] = cam_t
 
                 target_size = (398, 224)
-
+                
                 # Create heatmap without whitespace
                 fig, axes = plt.subplots(2, 5, figsize=(15, 6))
                 for t in range(5):
@@ -652,15 +652,9 @@ def visualize_gradcam(model, clips, action_ids, num_samples=15, num_views=2, sav
                     # Guardar frame y overlay                    
                     frame_path = os.path.join(image_dir, "frame.png")
                     overlay_path = os.path.join(image_dir, "overlay.png")
-
-                    frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR) 
-                    overlay = cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR)
-
+                   
                     cv2.imwrite(frame_path, (frame * 255).astype(np.uint8))
-                    cv2.imwrite(overlay_path, overlay)
-
-                    #cv2.imwrite(frame_path, (frame * 255).astype(np.uint8))
-                    #cv2.imwrite(overlay_path, (overlay * 255).astype(np.uint8))
+                    cv2.imwrite(overlay_path, (overlay * 255).astype(np.uint8))
 
                     print(f"Saved frame: {frame_path}")
                     print(f"Saved overlay: {overlay_path}")
