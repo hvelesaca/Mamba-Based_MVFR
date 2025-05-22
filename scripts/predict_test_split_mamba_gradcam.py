@@ -645,7 +645,7 @@ if __name__ == "__main__":
         print("Usando", torch.cuda.device_count(), "GPUs")
         model = torch.nn.DataParallel(model)
     model = model.to(device)
-    model_path = "/kaggle/input/mvfr-v3/pytorch/default/1/best_multitask_mamba_model_epoch4_ba32.7700.pth"
+    model_path = "/kaggle/input/mvfr-v4/pytorch/default/1/best_multitask_mamba_model_epoch5_ba31.2105.pth"
     model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True), strict=True)
 
     # Supongamos que 'model' es tu modelo de PyTorch
