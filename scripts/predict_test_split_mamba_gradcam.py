@@ -561,7 +561,7 @@ class GradCAM:
         cam = cam.view(B, V, T_act, H_act, W_act)
         return cam, foul_logits, action_logits
 
-def visualize_gradcam(model, clips, action_ids, num_samples=15, num_views=2, save_dir="gradcam_visualizations"):
+def visualize_gradcam2(model, clips, action_ids, num_samples=15, num_views=2, save_dir="gradcam_visualizations"):
     try:
         print(f"Generating Grad-CAM visualizations for {min(num_samples, len(clips))} samples...")
         print(f"Input clips shape: {clips.shape}")
@@ -649,8 +649,7 @@ def visualize_gradcam(model, clips, action_ids, num_samples=15, num_views=2, sav
                     image_dir = os.path.join(save_dir, f"action_{action_id}", f"view_{v}", f"frame_{t+1}")
                     os.makedirs(image_dir, exist_ok=True)
 
-                    # Guardar frame y overlay
-                    
+                    # Guardar frame y overlay                    
                     frame_path = os.path.join(image_dir, "frame.png")
                     overlay_path = os.path.join(image_dir, "overlay.png")
                     frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR) 
@@ -670,6 +669,89 @@ def visualize_gradcam(model, clips, action_ids, num_samples=15, num_views=2, sav
     except Exception as e:
         print(f"Error in visualize_gradcam: {str(e)}")
 
+from PIL import Image
+
+def visualize_gradcam(model, clips, action_ids, num_samples=15, num_views=2, save_dir="gradcam_visualizations"):
+    try:
+        print(f"Generating Grad-CAM visualizations for {min(num_samples, len(clips))} samples...")
+        os.makedirs(save_dir, exist_ok=True)
+
+        if isinstance(model, torch.nn.DataParallel):
+            backbone = model.module.backbone
+        else:
+            backbone = model.backbone
+
+        clips = clips[:num_samples]
+        action_ids = action_ids[:num_samples]
+
+        device = next(model.parameters()).device
+        clips = clips.to(device, non_blocking=True).requires_grad_(True)
+
+        resize = T.Resize((224, 224), antialias=True)
+        resized_clips = torch.zeros(clips.shape[0], clips.shape[1], clips.shape[2], clips.shape[3], 224, 224,
+                                  dtype=clips.dtype, device=device)
+        for b in range(clips.shape[0]):
+            for v in range(clips.shape[1]):
+                for t in range(clips.shape[3]):
+                    frame = clips[b, v, :, t, :, :]
+                    resized_frame = resize(frame)
+                    resized_clips[b, v, :, t, :, :] = resized_frame
+
+        clips = resized_clips
+
+        gradcam = GradCAM(model, backbone.conv_proj)
+        cams, foul_logits, action_logits = gradcam(clips)
+
+        reverse_foul_map = {v: k for k, v in MVFoulTestDataset.foul_map.items()}
+        reverse_action_map = {v: k for k, v in MVFoulTestDataset.action_map.items()}
+
+        original_frame_indices = list(range(6, 11))
+        gradcam_frame_indices = [i // 2 for i in original_frame_indices]
+
+        for i in range(len(clips)):
+            for v in range(num_views):
+                clip_name = "Clip 0" if v == 0 else "Clip Random"
+                cam = cams[i, v].detach().cpu().numpy()
+                clip = clips[i, v].detach().cpu().numpy().transpose(1, 2, 3, 0)
+                action_id = action_ids[i]
+                foul_pred_idx = torch.argmax(foul_logits[i]).item()
+                action_pred_idx = torch.argmax(action_logits[i]).item()
+
+                selected_frames = clip[original_frame_indices]
+                selected_cams = cam[gradcam_frame_indices]
+
+                cam_resized = np.zeros((len(gradcam_frame_indices), clip.shape[1], clip.shape[2]))
+                for t in range(len(gradcam_frame_indices)):
+                    cam_t = cv2.resize(selected_cams[t], (clip.shape[2], clip.shape[1]))
+                    cam_resized[t] = cam_t
+
+                target_size = (398, 224)
+
+                for t in range(5):
+                    frame = selected_frames[t]
+                    frame = (frame - frame.min()) / (frame.max() - frame.min())
+                    frame = Image.fromarray((frame * 255).astype(np.uint8)).resize(target_size)
+
+                    heatmap = (np.uint8(255 * cam_resized[t]))
+                    heatmap = Image.fromarray(heatmap).convert("RGB").resize(target_size)
+                    overlay = Image.blend(frame, heatmap, alpha=0.5)
+
+                    # Crear carpetas para cada imagen
+                    image_dir = os.path.join(save_dir, f"action_{action_id}", f"view_{v}", f"frame_{t+1}")
+                    os.makedirs(image_dir, exist_ok=True)
+
+                    # Guardar frame y overlay
+                    frame_path = os.path.join(image_dir, "frame.png")
+                    overlay_path = os.path.join(image_dir, "overlay.png")
+                    frame.save(frame_path)
+                    overlay.save(overlay_path)
+
+                    print(f"Saved frame: {frame_path}")
+                    print(f"Saved overlay: {overlay_path}")
+
+    except Exception as e:
+        print(f"Error in visualize_gradcam: {str(e)}")
+        
 def predict_test_split(model, test_loader, device="cuda" if torch.cuda.is_available() else "cpu"):
     model.eval()
     test_predictions = {"Actions": {}}
