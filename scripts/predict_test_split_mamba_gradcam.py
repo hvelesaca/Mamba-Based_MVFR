@@ -569,6 +569,9 @@ def predict_test_split(model, test_loader, device="cuda" if torch.cuda.is_availa
     print(f"All clips shape: {all_clips.shape}")
     print(f"Total action IDs collected: {len(all_action_ids)}")
     
+    print("all_clips: ", all_clips)
+    print("all_action_ids: ", all_action_ids)
+    
     # Randomly select 15 samples
     num_samples_to_visualize = 1
     if len(all_action_ids) < num_samples_to_visualize:
