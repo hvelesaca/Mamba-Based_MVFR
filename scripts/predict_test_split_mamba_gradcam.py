@@ -637,6 +637,8 @@ def visualize_gradcam(model, clips, action_ids, num_samples=15, num_views=2, sav
                 for t in range(len(gradcam_frame_indices)):
                     cam_t = cv2.resize(selected_cams[t], (clip.shape[2], clip.shape[1]))
                     cam_resized[t] = cam_t
+
+                target_size = (224, 398)  # width, height
                 
                 # Create heatmap
                 fig, axes = plt.subplots(2, 5, figsize=(15, 6))
@@ -644,6 +646,8 @@ def visualize_gradcam(model, clips, action_ids, num_samples=15, num_views=2, sav
                     # Original frame
                     frame = selected_frames[t]
                     frame = (frame - frame.min()) / (frame.max() - frame.min())
+                    frame = cv2.resize(frame, target_size, interpolation=cv2.INTER_LINEAR)
+
                     axes[0, t].imshow(frame)
                     axes[0, t].set_title(f"Frame {original_frame_indices[t]+1}")
                     axes[0, t].axis('off')
@@ -651,12 +655,13 @@ def visualize_gradcam(model, clips, action_ids, num_samples=15, num_views=2, sav
                     # Grad-CAM overlay
                     heatmap = cv2.applyColorMap(np.uint8(255 * cam_resized[t]), cv2.COLORMAP_JET)
                     heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB) / 255.0
+                    heatmap = cv2.resize(heatmap, target_size, interpolation=cv2.INTER_LINEAR)
                     overlay = frame * 0.5 + heatmap * 0.5
                     axes[1, t].imshow(overlay)
                     axes[1, t].set_title(f"Grad-CAM {original_frame_indices[t]+1}")
                     axes[1, t].axis('off')
                 
-                plt.suptitle(f"Action ID: {action_id} - {clip_name}\nFoul: {reverse_foul_map[foul_pred_idx]}\nAction: {reverse_action_map[action_pred_idx]}")
+                plt.suptitle(f"Action ID: {action_id} - {clip_name}; Foul: {reverse_foul_map[foul_pred_idx]}; Action: {reverse_action_map[action_pred_idx]}")
                 plt.tight_layout()
                 save_path = os.path.join(save_dir, f"gradcam_action_{action_id}_view_{v}.png")
                 plt.savefig(save_path)
