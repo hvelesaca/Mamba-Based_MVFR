@@ -575,7 +575,7 @@ def predict_test_split(model, test_loader, device="cuda" if torch.cuda.is_availa
         print(f"Warning: Only {len(all_action_ids)} samples available, visualizing all.")
         num_samples_to_visualize = len(all_action_ids)
 
-    idx_selected = range(0, 200)
+    idx_selected = range(200, 250)
     
     #indices = np.random.choice(len(all_action_ids), num_samples_to_visualize, replace=False)
 
