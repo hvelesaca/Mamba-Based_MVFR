@@ -1,7 +1,7 @@
 import os
 import torch
 from torch.utils.data import Dataset, DataLoader
-from model_2_v3 import MultiTaskModelMamba
+from model_2_v4 import MultiTaskModelMamba
 from tqdm import tqdm
 import json
 import datetime
