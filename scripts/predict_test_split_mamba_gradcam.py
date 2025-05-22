@@ -572,15 +572,11 @@ def visualize_gradcam(model, clips, action_ids, num_samples=15, num_views=2, sav
             backbone = model.module.backbone
         else:
             backbone = model.backbone
-            
-        # Check if conv_proj exists
+
         if not hasattr(backbone, 'conv_proj'):
-            print("Error: 'conv_proj' not found in model.backbone. Available modules:")
-            for name, module in backbone.named_modules():
-                print(f"  {name}: {module.__class__.__name__}")
+            print("Error: 'conv_proj' not found in model.backbone.")
             raise AttributeError("'conv_proj' not found in model.backbone")
-        
-        # Select first num_samples
+
         clips = clips[:num_samples]
         action_ids = action_ids[:num_samples]
         print(f"Selected clips shape: {clips.shape}")
@@ -588,62 +584,51 @@ def visualize_gradcam(model, clips, action_ids, num_samples=15, num_views=2, sav
         device = next(model.parameters()).device
         clips = clips.to(device, non_blocking=True).requires_grad_(True)
 
-        # Resize clips to 224x224
         resize = T.Resize((224, 224), antialias=True)
-        resized_clips = torch.zeros(clips.shape[0], clips.shape[1], clips.shape[2], clips.shape[3], 224, 224, 
+        resized_clips = torch.zeros(clips.shape[0], clips.shape[1], clips.shape[2], clips.shape[3], 224, 224,
                                   dtype=clips.dtype, device=device)
         for b in range(clips.shape[0]):
             for v in range(clips.shape[1]):
                 for t in range(clips.shape[3]):
-                    frame = clips[b, v, :, t, :, :]  # [C, H, W]
-                    resized_frame = resize(frame)  # [C, 224, 224]
+                    frame = clips[b, v, :, t, :, :]
+                    resized_frame = resize(frame)
                     resized_clips[b, v, :, t, :, :] = resized_frame
-        
+
         clips = resized_clips
         print(f"Resized clips shape: {clips.shape}")
-        
-        # Enable gradient tracking
-        #clips = clips.to(device, non_blocking=False).requires_grad_(True)
-        print(f"Clips requires_grad: {clips.requires_grad}")
-        
-        gradcam = GradCAM(model, backbone.conv_proj)  # Target MViT's conv_proj layer
-                
+
+        gradcam = GradCAM(model, backbone.conv_proj)
         cams, foul_logits, action_logits = gradcam(clips)
         print(f"Grad-CAM output shape: {cams.shape}")
-        
+
         reverse_foul_map = {v: k for k, v in MVFoulTestDataset.foul_map.items()}
         reverse_action_map = {v: k for k, v in MVFoulTestDataset.action_map.items()}
-        
-        # Central frames (indices 6 to 10 out of 16 frames, 0-based)
-        original_frame_indices = list(range(6, 11))  # Frames 6, 7, 8, 9, 10
-        # Grad-CAM temporal dimension is reduced (T=16 to T'=8, stride=2)
-        gradcam_frame_indices = [i // 2 for i in original_frame_indices]  # Maps to 3, 3, 4, 4, 5
-        
+
+        original_frame_indices = list(range(6, 11))
+        gradcam_frame_indices = [i // 2 for i in original_frame_indices]
+
         for i in range(len(clips)):
             for v in range(num_views):
                 clip_name = "Clip 0" if v == 0 else "Clip Random"
-                cam = cams[i, v].detach().cpu().numpy()  # [T', H', W']
-                clip = clips[i, v].detach().cpu().numpy().transpose(1, 2, 3, 0)  # [T, H, W, C]
+                cam = cams[i, v].detach().cpu().numpy()
+                clip = clips[i, v].detach().cpu().numpy().transpose(1, 2, 3, 0)
                 action_id = action_ids[i]
                 foul_pred_idx = torch.argmax(foul_logits[i]).item()
                 action_pred_idx = torch.argmax(action_logits[i]).item()
-                
-                # Select central frames for visualization
-                selected_frames = clip[original_frame_indices]  # [5, H, W, C]
-                selected_cams = cam[gradcam_frame_indices]  # [5, H', W']
-                
-                # Resize CAM to match clip dimensions
+
+                selected_frames = clip[original_frame_indices]
+                selected_cams = cam[gradcam_frame_indices]
+
                 cam_resized = np.zeros((len(gradcam_frame_indices), clip.shape[1], clip.shape[2]))
                 for t in range(len(gradcam_frame_indices)):
                     cam_t = cv2.resize(selected_cams[t], (clip.shape[2], clip.shape[1]))
                     cam_resized[t] = cam_t
 
-                target_size = (398, 224)  # width, height
-                
-                # Create heatmap
-                fig, axes = plt.subplots(2, 5, figsize=(15, 6))
+                target_size = (398, 224)
+
+                # Create heatmap without whitespace
+                fig, axes = plt.subplots(2, 5, figsize=(15, 6), gridspec_kw={'wspace': 0, 'hspace': 0})
                 for t in range(5):
-                    # Original frame
                     frame = selected_frames[t]
                     frame = (frame - frame.min()) / (frame.max() - frame.min())
                     frame = cv2.resize(frame, target_size, interpolation=cv2.INTER_LINEAR)
@@ -651,8 +636,7 @@ def visualize_gradcam(model, clips, action_ids, num_samples=15, num_views=2, sav
                     axes[0, t].imshow(frame)
                     axes[0, t].set_title(f"Frame {original_frame_indices[t]+1}")
                     axes[0, t].axis('off')
-                    
-                    # Grad-CAM overlay
+
                     heatmap = cv2.applyColorMap(np.uint8(255 * cam_resized[t]), cv2.COLORMAP_JET)
                     heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB) / 255.0
                     heatmap = cv2.resize(heatmap, target_size, interpolation=cv2.INTER_LINEAR)
@@ -660,11 +644,11 @@ def visualize_gradcam(model, clips, action_ids, num_samples=15, num_views=2, sav
                     axes[1, t].imshow(overlay)
                     axes[1, t].set_title(f"Grad-CAM {original_frame_indices[t]+1}")
                     axes[1, t].axis('off')
-                
+
                 plt.suptitle(f"Action ID: {action_id} - {clip_name}; Foul: {reverse_foul_map[foul_pred_idx]}; Action: {reverse_action_map[action_pred_idx]}")
-                plt.tight_layout()
+                plt.tight_layout(pad=0)
                 save_path = os.path.join(save_dir, f"gradcam_action_{action_id}_view_{v}.png")
-                plt.savefig(save_path)
+                plt.savefig(save_path, bbox_inches='tight', pad_inches=0)
                 print(f"Saved visualization: {save_path}")
                 plt.close()
     except Exception as e:
