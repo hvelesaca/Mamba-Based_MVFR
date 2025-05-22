@@ -658,6 +658,10 @@ def visualize_gradcam(model, clips, action_ids, num_samples=15, num_views=2, sav
 
                     frame = cv2.imread(frame_path) 
                     frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+                    overlay = cv2.imread(overlay_path) 
+                    overlay = cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB)
+
                     cv2.imwrite(frame_path, frame)
 
                     print(f"Saved frame: {frame_path}")
