@@ -579,7 +579,7 @@ def predict_test_split(model, test_loader, device="cuda" if torch.cuda.is_availa
     
     #indices = np.random.choice(len(all_action_ids), num_samples_to_visualize, replace=False)
 
-    for idx in indices: 
+    for idx in idx_selected: 
         indices = [idx]
         selected_clips = all_clips[indices].to(device)
         selected_action_ids = [all_action_ids[i] for i in indices]
