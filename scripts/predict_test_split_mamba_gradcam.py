@@ -475,8 +475,7 @@ def visualize_gradcam(model, clips, action_ids, num_samples=15, num_views=2, sav
         #clips = clips.to(device, non_blocking=False).requires_grad_(True)
         print(f"Clips requires_grad: {clips.requires_grad}")
         
-        #gradcam = GradCAM(model, backbone.conv_proj)  # Target MViT's conv_proj layer
-        gradcam = GradCAM(model, model.module.foul_attention.attention.out_proj)  # Target MViT's conv_proj layer
+        gradcam = GradCAM(model, backbone.conv_proj)  # Target MViT's conv_proj layer
                 
         cams, foul_logits, action_logits = gradcam(clips)
         print(f"Grad-CAM output shape: {cams.shape}")
@@ -576,7 +575,7 @@ def predict_test_split(model, test_loader, device="cuda" if torch.cuda.is_availa
         print(f"Warning: Only {len(all_action_ids)} samples available, visualizing all.")
         num_samples_to_visualize = len(all_action_ids)
 
-    idx_selected = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+    idx_selected = range(0, 200)
     
     #indices = np.random.choice(len(all_action_ids), num_samples_to_visualize, replace=False)
 
