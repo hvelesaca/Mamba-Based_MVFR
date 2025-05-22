@@ -638,7 +638,7 @@ def visualize_gradcam(model, clips, action_ids, num_samples=15, num_views=2, sav
                     cam_t = cv2.resize(selected_cams[t], (clip.shape[2], clip.shape[1]))
                     cam_resized[t] = cam_t
 
-                target_size = (224, 398)  # width, height
+                target_size = (398, 224)  # width, height
                 
                 # Create heatmap
                 fig, axes = plt.subplots(2, 5, figsize=(15, 6))
