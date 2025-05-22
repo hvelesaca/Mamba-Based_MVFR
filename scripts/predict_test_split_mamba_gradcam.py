@@ -646,7 +646,7 @@ def visualize_gradcam(model, clips, action_ids, num_samples=15, num_views=2, sav
                     axes[1, t].axis('off')
 
                 plt.suptitle(f"Action ID: {action_id} - {clip_name}; Foul: {reverse_foul_map[foul_pred_idx]}; Action: {reverse_action_map[action_pred_idx]}")
-                plt.tight_layout(pad=0)
+                plt.tight_layout()#pad=0)
                 save_path = os.path.join(save_dir, f"gradcam_action_{action_id}_view_{v}.png")
                 plt.savefig(save_path, bbox_inches='tight', pad_inches=0)
                 print(f"Saved visualization: {save_path}")
