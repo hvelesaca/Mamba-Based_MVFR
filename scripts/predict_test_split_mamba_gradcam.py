@@ -574,15 +574,20 @@ def predict_test_split(model, test_loader, device="cuda" if torch.cuda.is_availa
     if len(all_action_ids) < num_samples_to_visualize:
         print(f"Warning: Only {len(all_action_ids)} samples available, visualizing all.")
         num_samples_to_visualize = len(all_action_ids)
+
+    idx_selected = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
     
-    indices = np.random.choice(len(all_action_ids), num_samples_to_visualize, replace=False)
-    selected_clips = all_clips[indices].to(device)
-    selected_action_ids = [all_action_ids[i] for i in indices]
-    print(f"Selected {num_samples_to_visualize} samples for visualization: {selected_action_ids}")
-    
-    # Visualize Grad-CAM for the selected samples
-    with torch.enable_grad():
-        visualize_gradcam(model, selected_clips, selected_action_ids, num_samples=num_samples_to_visualize)
+    #indices = np.random.choice(len(all_action_ids), num_samples_to_visualize, replace=False)
+
+    for idx in indices: 
+        indices = [idx]
+        selected_clips = all_clips[indices].to(device)
+        selected_action_ids = [all_action_ids[i] for i in indices]
+        print(f"Selected {num_samples_to_visualize} samples for visualization: {selected_action_ids}")
+        
+        # Visualize Grad-CAM for the selected samples
+        with torch.enable_grad():
+            visualize_gradcam(model, selected_clips, selected_action_ids, num_samples=num_samples_to_visualize)
     
     # Save predictions
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
