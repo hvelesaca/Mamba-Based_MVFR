@@ -627,7 +627,7 @@ def visualize_gradcam(model, clips, action_ids, num_samples=15, num_views=2, sav
                 target_size = (398, 224)
 
                 # Create heatmap without whitespace
-                fig, axes = plt.subplots(2, 5, figsize=(15, 6), gridspec_kw={'wspace': 0, 'hspace': 0})
+                fig, axes = plt.subplots(2, 5, figsize=(15, 6))
                 for t in range(5):
                     frame = selected_frames[t]
                     frame = (frame - frame.min()) / (frame.max() - frame.min())
@@ -645,10 +645,23 @@ def visualize_gradcam(model, clips, action_ids, num_samples=15, num_views=2, sav
                     axes[1, t].set_title(f"Grad-CAM {original_frame_indices[t]+1}")
                     axes[1, t].axis('off')
 
+                    # Crear carpetas para cada imagen
+                    image_dir = os.path.join(save_dir, f"action_{action_id}", f"view_{v}", f"frame_{t+1}")
+                    os.makedirs(image_dir, exist_ok=True)
+
+                    # Guardar frame y overlay
+                    frame_path = os.path.join(image_dir, "frame.png")
+                    overlay_path = os.path.join(image_dir, "overlay.png")
+                    cv2.imwrite(frame_path, (frame * 255).astype(np.uint8))
+                    cv2.imwrite(overlay_path, (overlay * 255).astype(np.uint8))
+
+                    print(f"Saved frame: {frame_path}")
+                    print(f"Saved overlay: {overlay_path}")
+
                 plt.suptitle(f"Action ID: {action_id} - {clip_name}; Foul: {reverse_foul_map[foul_pred_idx]}; Action: {reverse_action_map[action_pred_idx]}")
-                plt.tight_layout()#pad=0)
+                plt.tight_layout()
                 save_path = os.path.join(save_dir, f"gradcam_action_{action_id}_view_{v}.png")
-                plt.savefig(save_path, bbox_inches='tight', pad_inches=0)
+                plt.savefig(save_path, bbox_inches='tight')
                 print(f"Saved visualization: {save_path}")
                 plt.close()
     except Exception as e:
