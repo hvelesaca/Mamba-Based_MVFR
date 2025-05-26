@@ -4,7 +4,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import torch.nn as nn
 import torch.nn.functional as F
-from model_2_v4 import MultiTaskModelMamba
+from model_2_v2 import MultiTaskModelMamba
 from tqdm import tqdm
 import numpy as np
 import datetime
@@ -304,7 +304,7 @@ if __name__ == "__main__":
         print("Usando", torch.cuda.device_count(), "GPUs")
         model = torch.nn.DataParallel(model)
     model = model.to(device)
-    model_path = "/kaggle/input/mvfr-v4/pytorch/default/1/best_multitask_mamba_model_epoch5_ba31.2105.pth"
+    model_path = "/kaggle/input/mvfr-v2/pytorch/default/1/best_multitask_mamba_model_epoch6_ba31.8905.pth"
     model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True), strict=True)
     
     print("\nGenerating Predictions and Feature Map Visualizations...")
