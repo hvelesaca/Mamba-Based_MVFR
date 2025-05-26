@@ -283,7 +283,7 @@ if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
     
     # Load test dataset (filtered by default)
-    test_dataset = MVFoulDataset("dataset/test_preprocessed", "dataset/test/annotations.json", 
+    test_dataset = MVFoulDataset("/kaggle/input/datasetmvfd/datasetMVFD/test_preprocessed", "/kaggle/input/datasetmvfd/datasetMVFD/test_preprocessed/annotations.json", 
                                  split='test', preload=True, filter_data=True)
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, collate_fn=custom_collate, 
                              num_workers=0, pin_memory=True)  # Batch size 1 for individual visualization
