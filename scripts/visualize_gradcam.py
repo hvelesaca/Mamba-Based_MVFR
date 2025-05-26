@@ -289,8 +289,18 @@ if __name__ == "__main__":
                              num_workers=0, pin_memory=True)  # Batch size 1 for individual visualization
     
     # Load the trained MultiTaskModel
-    multitask_model = MultiTaskModel(agr_type='max').to(device)
-    multitask_model.load_state_dict(torch.load("/kaggle/input/mvfr-v4/pytorch/default/1/best_multitask_mamba_model_epoch5_ba31.2105.pth", map_location=device))
+    #multitask_model = MultiTaskModel(agr_type='max').to(device)
+    #multitask_model.load_state_dict(torch.load("/kaggle/input/mvfr-v4/pytorch/default/1/best_multitask_mamba_model_epoch5_ba31.2105.pth", map_location=device))
+
+    # Load the trained MultiTaskModel
+    model = MultiTaskModelMamba() 
+
+    if torch.cuda.device_count() > 1:
+        print("Usando", torch.cuda.device_count(), "GPUs")
+        model = torch.nn.DataParallel(model)
+    model = model.to(device)
+    model_path = "/kaggle/input/mvfr-v4/pytorch/default/1/best_multitask_mamba_model_epoch5_ba31.2105.pth"
+    model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True), strict=True)
     
     print("\nGenerating Predictions and Feature Map Visualizations...")
     visualize_predictions(multitask_model, test_loader, device)
