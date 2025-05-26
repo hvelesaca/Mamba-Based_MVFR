@@ -4,7 +4,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import torch.nn as nn
 import torch.nn.functional as F
-from model_2 import MultiTaskModel
+from model_2_v4 import MultiTaskModel
 from tqdm import tqdm
 import numpy as np
 import datetime
@@ -290,7 +290,7 @@ if __name__ == "__main__":
     
     # Load the trained MultiTaskModel
     multitask_model = MultiTaskModel(agr_type='max').to(device)
-    multitask_model.load_state_dict(torch.load("models/best_multitask_model.pth", map_location=device))
+    multitask_model.load_state_dict(torch.load("/kaggle/input/mvfr-v4/pytorch/default/1/best_multitask_mamba_model_epoch5_ba31.2105.pth", map_location=device))
     
     print("\nGenerating Predictions and Feature Map Visualizations...")
     visualize_predictions(multitask_model, test_loader, device)
