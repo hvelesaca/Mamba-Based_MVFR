@@ -303,4 +303,4 @@ if __name__ == "__main__":
     model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True), strict=True)
     
     print("\nGenerating Predictions and Feature Map Visualizations...")
-    visualize_predictions(multitask_model, test_loader, device)
+    visualize_predictions(model, test_loader, device)
