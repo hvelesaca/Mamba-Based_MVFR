@@ -4,7 +4,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import torch.nn as nn
 import torch.nn.functional as F
-from model_2_v4 import MultiTaskModel
+from model_2_v4 import MultiTaskModelMamba
 from tqdm import tqdm
 import numpy as np
 import datetime
