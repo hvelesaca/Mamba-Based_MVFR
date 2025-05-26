@@ -189,8 +189,13 @@ def get_feature_map_heatmap(model, clips, device='cuda'):
     activations = []
     def forward_hook(module, input, output):
         activations.append(output.detach())
-    
-    target_layer = model.backbone.conv_proj
+
+    if isinstance(model, torch.nn.DataParallel):
+            backbone = model.module.backbone
+        else:
+            backbone = model.backbone
+            
+    target_layer = backbone.conv_proj
     handle = target_layer.register_forward_hook(forward_hook)
     
     # Forward pass
